@@ -3,7 +3,7 @@
     "target": "ES2024",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -15,10 +15,10 @@
     "baseUrl": "./src",
     "lib": ["ES2024"],
     "types": ["@types/bun", "bun", "bun-types", "bun-types/globals"],
-    "noEmit": true
+    "noEmit": false
   },
   "include": [
-    "src/**/*", "test/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",

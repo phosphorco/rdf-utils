@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "bun build src/index.ts --outdir=dist --target=node",
+    "build": "bun run clean && bun tsc && bun build src/index.ts --outdir=dist",
     "test": "bun test test/",
     "test:watch": "bun test test/ --watch",
     "test:integration": "bun test test-integration/",
@@ -30,7 +30,7 @@
     "fast-check": "^4.2.0",
     "n3": "^1.26.0",
     "stardog": "^8.0.1",
-    "typescript": "^5.0.0"
+    "typescript": "^5.8.3"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
