@@ -2,6 +2,9 @@ import { ChangeSetGraph } from './graph/changeset';
 import { factory } from './rdf';
 import { NamedNode, Term } from '@rdfjs/types';
 
+
+
+
 export class Resource implements NamedNode {
   private changeset: ChangeSetGraph;
 
@@ -9,6 +12,7 @@ export class Resource implements NamedNode {
   public value: string;
   
   constructor(changeset: ChangeSetGraph, subject: NamedNode) {
+
     this.changeset = changeset;
     this.value = subject.value;
   }

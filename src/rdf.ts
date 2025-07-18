@@ -113,8 +113,8 @@ class ImmutableBaseQuad implements BaseQuad {
   }
 }
 
-export function namespace(baseUri: string): Record<string, NamedNode> {
-  return new Proxy({} as Record<string, NamedNode>, {
+export function namespace(baseUri: string): { [key: string]: NamedNode } {
+  return new Proxy({} as { [key: string]: NamedNode }, {
     get(target, property) {
       if (typeof property === 'string') {
         return new ImmutableTerm("NamedNode", baseUri + property);
