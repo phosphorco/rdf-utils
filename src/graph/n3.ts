@@ -12,9 +12,9 @@ import {
 } from 'sparqljs';
 import type { Bindings, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types';
-import { MutableGraph, Graph} from '../graph.js';
-import { NamedNode, DefaultGraph, Quad, factory } from '../rdf.js';
-import {BaseGraph, parseQuadsFromString, parseQuadsFromFile} from './base.ts';
+import { MutableGraph, Graph} from '../graph';
+import { NamedNode, DefaultGraph, Quad, factory } from '../rdf';
+import {BaseGraph, parseQuadsFromString, parseQuadsFromFile} from './base';
 import {BaseQuad} from "n3";
 
 export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {

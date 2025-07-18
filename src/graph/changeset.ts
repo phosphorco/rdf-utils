@@ -1,10 +1,10 @@
-import {Graph, ImmutableGraph, MutableGraph} from '../graph.js';
-import { NamedNode, Quad  } from '../rdf.js';
-import { BaseGraph } from './base.js';
+import {Graph, ImmutableGraph, MutableGraph} from '../graph';
+import { NamedNode, Quad  } from '../rdf';
+import { BaseGraph } from './base';
 import { SparqlQuery } from 'sparqljs';
 import * as rdfjs from '@rdfjs/types';
 import { Set } from 'immutable';
-import { ImmutableSetGraph } from './immutable.js';
+import { ImmutableSetGraph } from './immutable';
 import * as n3 from 'n3';
 
 export class ChangeSetGraph extends BaseGraph<true> {

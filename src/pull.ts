@@ -7,9 +7,9 @@ import {
   Term,
   Literal,
   Quad_Subject, Quad_Object
-} from './rdf.ts';
+} from './rdf';
 import * as rdfjs from '@rdfjs/types';
-import { Graph } from './graph.ts';
+import { Graph } from './graph';
 import {
   ConstructQuery,
   SelectQuery,
@@ -23,8 +23,8 @@ import {
 } from 'sparqljs';
 import * as sparqljs from 'sparqljs';
 import { Map, is, Seq } from 'immutable'
-import {N3Graph} from "./graph/n3.ts";
-import {ImmutableSetGraph} from "./graph/immutable.ts";
+import {N3Graph} from "./graph/n3";
+import {ImmutableSetGraph} from "./graph/immutable";
 
 export type ConstraintValue = NamedNode | string | number | boolean | undefined;
 export type RecurseExpr = [NamedNode, '...'];

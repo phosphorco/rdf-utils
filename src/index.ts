@@ -1,8 +1,8 @@
 // Main exports
-export * from './rdf.js';
-export * from './graph.js';
-export * from './graph/n3.js';
-export * from './graph/immutable.js';
-export * from './graph/stardog.js';
-export * from './pull.ts';
-export * from './resource.js';
+export * from './rdf';
+export * from './graph';
+export * from './graph/n3';
+export * from './graph/immutable';
+export * from './graph/stardog';
+export * from './pull';
+export * from './resource';

@@ -1,5 +1,5 @@
-import { ChangeSetGraph } from './graph/changeset.js';
-import { factory } from './rdf.js';
+import { ChangeSetGraph } from './graph/changeset';
+import { factory } from './rdf';
 import { NamedNode, Term } from '@rdfjs/types';
 
 export class Resource implements NamedNode {

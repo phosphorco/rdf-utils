@@ -1,4 +1,5 @@
 import { BaseQuad, Bindings, BaseQuery, Term } from '@rdfjs/types';
+import * as rdfjs from '@rdfjs/types'
 import { NamedNode, factory, Quad } from '../rdf';
 import { MutableGraph, TransactionalGraph } from '../graph';
 import { BaseGraph, serializeQuads, saveQuadsToFile } from './base';

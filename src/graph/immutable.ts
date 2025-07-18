@@ -4,9 +4,9 @@ import { translate } from 'sparqlalgebrajs';
 import {  SparqlQuery } from 'sparqljs';
 import type { Source, Stream, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types';
-import { ImmutableGraph } from '../graph.js';
-import { NamedNode, DefaultGraph, Quad, factory } from '../rdf.js';
-import { BaseGraph } from './base.js';
+import { ImmutableGraph } from '../graph';
+import { NamedNode, DefaultGraph, Quad, factory } from '../rdf';
+import { BaseGraph } from './base';
 import { Readable } from 'stream';
 import * as n3 from 'n3';
 
