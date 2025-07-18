@@ -1,0 +1,80 @@
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Person 1: John Doe
+<http://example.com/person/john> a foaf:Person ;
+    foaf:name "John Doe" ;
+    foaf:age 30 ;
+    foaf:email "john@example.com" ;
+    foaf:active true ;
+    foaf:knows <http://example.com/person/jane> ;
+    foaf:friend <http://example.com/person/bob> ;
+    foaf:homepage <http://johndoe.com> .
+
+# Person 2: Jane Smith
+<http://example.com/person/jane> a foaf:Person ;
+    foaf:name "Jane Smith" ;
+    foaf:age 25 ;
+    foaf:email "jane@example.com" ;
+    foaf:active true ;
+    foaf:knows <http://example.com/person/john> ;
+    foaf:knows <http://example.com/person/bob> ;
+    foaf:friend <http://example.com/person/alice> ;
+    foaf:homepage <http://janesmith.com> .
+
+# Person 3: Bob Wilson
+<http://example.com/person/bob> a foaf:Person ;
+    foaf:name "Bob Wilson" ;
+    foaf:age 35 ;
+    foaf:email "bob@example.com" ;
+    foaf:active false ;
+    foaf:knows <http://example.com/person/jane> ;
+    foaf:friend <http://example.com/person/john> ;
+    foaf:friend <http://example.com/person/alice> ;
+    foaf:homepage <http://bobwilson.com> .
+
+# Person 4: Alice Johnson
+<http://example.com/person/alice> a foaf:Person ;
+    foaf:name "Alice Johnson" ;
+    foaf:age 28 ;
+    foaf:email "alice@example.com" ;
+    foaf:active true ;
+    foaf:friend <http://example.com/person/jane> ;
+    foaf:friend <http://example.com/person/bob> ;
+    foaf:homepage <http://alicejohnson.com> .
+
+# Person 5: Charlie Brown (different type, no email)
+<http://example.com/person/charlie> a foaf:Agent ;
+    foaf:name "Charlie Brown" ;
+    foaf:age 22 ;
+    foaf:active true ;
+    foaf:knows <http://example.com/person/john> .
+
+# Homepage documents
+<http://johndoe.com> a foaf:Document ;
+    dc:title "John's Homepage" ;
+    dc:creator <http://example.com/person/john> .
+
+<http://janesmith.com> a foaf:Document ;
+    dc:title "Jane's Blog" ;
+    dc:creator <http://example.com/person/jane> .
+
+<http://bobwilson.com> a foaf:Document ;
+    dc:title "Bob's Portfolio" ;
+    dc:creator <http://example.com/person/bob> .
+
+<http://alicejohnson.com> a foaf:Document ;
+    dc:title "Alice's Site" ;
+    dc:creator <http://example.com/person/alice> .
+
+# Some projects
+<http://example.com/project/webapp> a foaf:Project ;
+    dc:title "Web Application" ;
+    dc:creator <http://example.com/person/john> ;
+    dc:creator <http://example.com/person/jane> .
+
+<http://example.com/project/mobile> a foaf:Project ;
+    dc:title "Mobile App" ;
+    dc:creator <http://example.com/person/bob> .
