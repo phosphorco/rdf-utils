@@ -113,33 +113,30 @@ class ImmutableBaseQuad implements BaseQuad {
   }
 }
 
-export function namespace(baseUri: string): { [key: string]: NamedNode } {
-  return new Proxy({} as { [key: string]: NamedNode }, {
-    get(target, property) {
-      if (typeof property === 'string') {
-        return new ImmutableTerm("NamedNode", baseUri + property);
-      }
-      return undefined;
-    },
-    has(target, property) {
-      return typeof property === 'string';
-    },
-    ownKeys(target) {
-      // Return empty array since we don't have predefined keys
-      return [];
+export type Namespace = {
+  [key: string]: NamedNode
+}
+
+export function namespace(baseUri: string) {
+  return new Proxy({} as Namespace, {
+    get(target, property: string): NamedNode {
+      return new ImmutableTerm("NamedNode", baseUri + property) as NamedNode;
     }
   });
 }
 
-export const XSD = namespace('http://www.w3.org/2001/XMLSchema#');
-export const RDF = namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#');
-export const RDFS = namespace('http://www.w3.org/2000/01/rdf-schema#');
-export const OWL = namespace('http://www.w3.org/2002/07/owl#');
-export const DC = namespace('http://purl.org/dc/elements/1.1/');
-export const DCTERMS = namespace('http://purl.org/dc/terms/');
-export const FOAF = namespace('http://xmlns.com/foaf/0.1/');
-export const SKOS = namespace('http://www.w3.org/2004/02/skos/core#');
-export const VCARD = namespace('http://www.w3.org/2006/vcard/ns#');
+// Global mutable prefix map, for convenience
+export const globalPrefixMap: Record<string, string> = {
+  xsd: 'http://www.w3.org/2000/01/rdf-schema#',
+  rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
+  owl: 'http://www.w3.org/2002/07/owl#'
+};
+
+export const XSD = namespace(globalPrefixMap.xsd);
+export const RDF = namespace(globalPrefixMap.rdf);
+export const RDFS = namespace(globalPrefixMap.rdfs);
+export const OWL = namespace(globalPrefixMap.owl);
 
 export class ImmutableDataFactory implements RDFJS.DataFactory {
 
@@ -272,3 +269,4 @@ export class ImmutableDataFactory implements RDFJS.DataFactory {
 }
 
 export const factory = new ImmutableDataFactory();
+
