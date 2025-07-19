@@ -11,7 +11,8 @@ export class ChangeSetGraph extends BaseGraph<true> {
   private original: ImmutableSetGraph;
   public current: ImmutableSetGraph;
 
-  constructor(graph: ImmutableSetGraph) {
+  constructor(graph?: ImmutableSetGraph) {
+    if(!graph) graph = new ImmutableSetGraph();
     super(graph.iri as NamedNode);
     this.original = graph;
     this.current = graph;
