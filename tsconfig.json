@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2024",
+    "target": "es2024",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": false,
@@ -13,7 +13,7 @@
     "declarationMap": true,
     "outDir": "./dist",
     "baseUrl": "./src",
-    "lib": ["ES2024"],
+    "lib": ["es2024"],
     "types": ["@types/bun", "bun", "bun-types", "bun-types/globals"],
     "noEmit": false
   },

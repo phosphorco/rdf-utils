@@ -1,11 +1,12 @@
 import {Graph, ImmutableGraph, MutableGraph} from '../graph';
-import { NamedNode, Quad  } from '../rdf';
+import { NamedNode, BlankNode, Quad, Quad_Subject, factory  } from '../rdf';
 import { BaseGraph } from './base';
 import { SparqlQuery } from 'sparqljs';
 import * as rdfjs from '@rdfjs/types';
 import { Set } from 'immutable';
 import { ImmutableSetGraph } from './immutable';
 import * as n3 from 'n3';
+import * as resource from '../resource';
 
 export class ChangeSetGraph extends BaseGraph<true> {
   private original: ImmutableSetGraph;
@@ -83,5 +84,13 @@ export class ChangeSetGraph extends BaseGraph<true> {
   saveToFile(path: string, format?: string): void {
     const content = new n3.Writer({ format }).quadsToString([...this.quads()]);
     require('fs').writeFileSync(path, content, 'utf8');
+  }
+
+  resource<T extends Quad_Subject>(subject: T): resource.ResourceOf<T> {
+    return resource.resource(this, subject);
+  }
+
+  bnode(prefix?: string): resource.ResourceOf<BlankNode> {
+    return resource.resource(this, factory.blankNode(prefix));
   }
 }

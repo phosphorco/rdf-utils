@@ -1,68 +1,62 @@
 import { ChangeSetGraph } from './graph/changeset';
 import { factory } from './rdf';
-import { NamedNode, Term } from '@rdfjs/types';
+import { NamedNode, Quad_Subject, Term } from '@rdfjs/types';
 
-
-
-
-export class Resource implements NamedNode {
+class Resource<T extends Quad_Subject> {
   private changeset: ChangeSetGraph;
+  private subject: T;
 
-  public termType: "NamedNode" = "NamedNode";
-  public value: string;
-  
-  constructor(changeset: ChangeSetGraph, subject: NamedNode) {
+  public get termType() { return this.subject.termType }
+  public get value() { return this.subject.value; }
 
+  constructor(changeset: ChangeSetGraph, subject: T) {
     this.changeset = changeset;
-    this.value = subject.value;
+    this.subject = subject;
   }
 
   equals(other: Term | null | undefined): boolean {
     if (!other) return false;
-    if (other.termType !== "NamedNode") return false;
-    return other.value === this.value;
-  }
-
-  static with(resource: Resource, subject: NamedNode): Resource {
-    return new Resource(resource.changeset, subject);
+    if (other.termType !== this.subject.termType) return false;
+    return other.value === this.subject.value;
   }
 
   set(predicate: NamedNode, value: ResourceValue): this {
     // Remove existing values for this predicate
-    const existing = [...this.changeset.find(this, predicate, null)];
+    const existing = [...this.changeset.find(this.subject, predicate, null)];
     if (existing.length > 0) {
       this.changeset.remove(existing);
     }
     
     // Add new value
     const term = factory.fromJs(value);
-    const quad = factory.quad(this, predicate, term);
+    const quad = factory.quad(this.subject, predicate, term);
     this.changeset.add([quad]);
     
     return this;
   }
 
   get(predicate: NamedNode): ResourceValue | undefined {
-    const quads = [...this.changeset.find(this, predicate, null)];
+    const quads = [...this.changeset.find(this.subject, predicate, null)];
     if (quads.length === 0) return undefined;
     
     const objectTerm = quads[0].object;
-    
+
+
     // Special case: if it's a NamedNode, return a new Resource
-    if (objectTerm.termType === 'NamedNode') {
-      return new Resource(this.changeset, objectTerm as NamedNode);
+    if (objectTerm.termType === 'NamedNode' || objectTerm.termType === 'BlankNode') {
+      return resource(this.changeset, objectTerm);
     }
-    
+
     // Convert RDF term back to JS value
     return factory.toJs(objectTerm);
   }
 
   getAll(predicate: NamedNode): Iterable<ResourceValue> {
-    const quads = [...this.changeset.find(this, predicate, null)];
+    const quads = [...this.changeset.find(this.subject, predicate, null)];
     return quads.map(quad => {
       const objectTerm = quad.object;
-      if (objectTerm.termType === 'NamedNode') {
-        return new Resource(this.changeset, objectTerm as NamedNode);
+      if (objectTerm.termType === 'NamedNode' || objectTerm.termType === 'BlankNode') {
+        return resource(this.changeset, objectTerm);
       }
       return factory.toJs(objectTerm);
     });
@@ -70,7 +64,7 @@ export class Resource implements NamedNode {
 
   setAll(predicate: NamedNode, values: ResourceValue[]): this {
     // Remove existing values
-    const existing = [...this.changeset.find(this, predicate, null)];
+    const existing = [...this.changeset.find(this.subject, predicate, null)];
     if (existing.length > 0) {
       this.changeset.remove(existing);
     }
@@ -78,7 +72,7 @@ export class Resource implements NamedNode {
     // Add new values
     const quads = values.map(value => {
       const term = factory.fromJs(value);
-      return factory.quad(this, predicate, term);
+      return factory.quad(this.subject, predicate, term);
     });
     this.changeset.add(quads);
     
@@ -86,12 +80,12 @@ export class Resource implements NamedNode {
   }
 
   has(predicate: NamedNode): boolean {
-    const quads = [...this.changeset.find(this, predicate, null)];
+    const quads = [...this.changeset.find(this.subject, predicate, null)];
     return quads.length > 0;
   }
 
   delete(predicate: NamedNode): this {
-    const existing = [...this.changeset.find(this, null)];
+    const existing = [...this.changeset.find(this.subject, null)];
     if (existing.length > 0) {
       this.changeset.remove(existing);
     }
@@ -99,14 +93,14 @@ export class Resource implements NamedNode {
   }
 
   entries(): Iterable<[NamedNode, ResourceValue]> {
-    const quads = [...this.changeset.find(this, null, null)];
+    const quads = [...this.changeset.find(this.subject, null, null)];
     return quads.map(quad => {
       const predicate = quad.predicate as NamedNode;
       const objectTerm = quad.object;
       let value: ResourceValue;
       
-      if (objectTerm.termType === 'NamedNode') {
-        value = new Resource(this.changeset, objectTerm as NamedNode);
+      if (objectTerm.termType === 'NamedNode' || objectTerm.termType === 'BlankNode') {
+        value = resource(this.changeset, objectTerm);
       } else {
         value = factory.toJs(objectTerm);
       }
@@ -116,4 +110,11 @@ export class Resource implements NamedNode {
   }
 }
 
-export type ResourceValue = Resource | NamedNode | string | number | boolean | Date;
+export type ResourceOf<T extends Quad_Subject> = Resource<T> & T;
+
+export function resource<T extends Quad_Subject>(changeset: ChangeSetGraph, subject: T): ResourceOf<T> {
+  // Ugly cast, HOWEVER, we know it's guaranteed to work.
+  return new Resource<T>(changeset, subject) as unknown as ResourceOf<T>;
+}
+
+export type ResourceValue = Quad_Subject | string | number | boolean | Date;

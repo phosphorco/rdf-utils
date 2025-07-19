@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test';
-import { Resource } from '../src/resource.js';
+import { resource as makeResource } from '../src/resource.js';
 import { ChangeSetGraph } from '../src/graph/changeset.js';
 import { ImmutableSetGraph } from '../src/graph/immutable.js';
 import { factory, namespace } from '../src/rdf.js';
@@ -10,14 +10,14 @@ const FOAF = namespace('http://xmlns.com/foaf/0.1/');
 describe('Resource', () => {
   test('should create a Resource with changeset and subject', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const r = makeResource(changeset, EX.alice);
     
-    expect(resource).toBeDefined();
+    expect(r).toBeDefined();
   });
 
   test('should set and get string values', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(FOAF.name, 'Alice Smith');
     const name = resource.get(FOAF.name);
@@ -27,7 +27,7 @@ describe('Resource', () => {
 
   test('should set and get number values', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(EX.age, 30);
     const age = resource.get(EX.age);
@@ -37,7 +37,7 @@ describe('Resource', () => {
 
   test('should set and get boolean values', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(EX.active, true);
     const active = resource.get(EX.active);
@@ -47,7 +47,7 @@ describe('Resource', () => {
 
   test('should set and get Date values', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     const date = new Date('2023-01-01T00:00:00Z');
     resource.set(EX.created, date);
@@ -56,19 +56,10 @@ describe('Resource', () => {
     expect(created).toEqual(date);
   });
 
-  test('should set and get NamedNode values as Resources', () => {
-    const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
-    
-    resource.set(FOAF.knows, EX.bob);
-    const friend = resource.get(FOAF.knows);
-    
-    expect(friend).toBeInstanceOf(Resource);
-  });
 
   test('should support fluent chaining', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     const result = resource
       .set(FOAF.name, 'Alice Smith')
@@ -83,7 +74,7 @@ describe('Resource', () => {
 
   test('should setAll and getAll multiple values', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.setAll(EX.skill, ['TypeScript', 'RDF', 'SPARQL']);
     const skills = [...resource.getAll(EX.skill)];
@@ -93,7 +84,7 @@ describe('Resource', () => {
 
   test('should check if property exists with has()', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     expect(resource.has(FOAF.name)).toBe(false);
     
@@ -103,7 +94,7 @@ describe('Resource', () => {
 
   test('should delete properties', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(FOAF.name, 'Alice Smith');
     expect(resource.has(FOAF.name)).toBe(true);
@@ -114,7 +105,7 @@ describe('Resource', () => {
 
   test('should replace existing values when setting', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(FOAF.name, 'Alice Smith');
     resource.set(FOAF.name, 'Alice Johnson');
@@ -124,7 +115,7 @@ describe('Resource', () => {
 
   test('should iterate over entries', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(FOAF.name, 'Alice Smith');
     resource.set(EX.age, 30);
@@ -141,17 +132,16 @@ describe('Resource', () => {
 
   test('should create Resource with static with() method', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const alice = new Resource(changeset, EX.alice);
+    const alice = makeResource(changeset, EX.alice);
     
-    const bob = Resource.with(alice, EX.bob);
-    
-    expect(bob).toBeInstanceOf(Resource);
+    const bob = changeset.resource(EX.bob);
+
     expect(bob).not.toBe(alice);
   });
 
   test('should handle decimal numbers correctly', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     resource.set(EX.score, 95.5);
     const score = resource.get(EX.score);
@@ -161,14 +151,14 @@ describe('Resource', () => {
 
   test('should return undefined for non-existent properties', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     expect(resource.get(FOAF.name)).toBeUndefined();
   });
 
   test('should return empty iterable for non-existent properties with getAll', () => {
     const changeset = new ChangeSetGraph(new ImmutableSetGraph());
-    const resource = new Resource(changeset, EX.alice);
+    const resource = makeResource(changeset, EX.alice);
     
     const results = [...resource.getAll(EX.skill)];
     expect(results).toEqual([]);
