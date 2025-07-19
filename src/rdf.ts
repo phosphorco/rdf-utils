@@ -16,7 +16,6 @@ export type Quad_Predicate = RDFJS.Quad_Predicate & ValueObject;
 export type Quad_Object = RDFJS.Quad_Object & ValueObject;
 export type Quad_Graph = RDFJS.Quad_Graph & ValueObject;
 
-
 class ImmutableTerm<TermType extends string, ValueType extends string> implements ValueObject {
   public termType: TermType;
   public value: ValueType;
@@ -140,6 +139,13 @@ export const DCTERMS = namespace('http://purl.org/dc/terms/');
 export const FOAF = namespace('http://xmlns.com/foaf/0.1/');
 export const SKOS = namespace('http://www.w3.org/2004/02/skos/core#');
 export const VCARD = namespace('http://www.w3.org/2006/vcard/ns#');
+
+export const globalPrefixMap = {
+  xsd: 'http://www.w3.org/2001/XMLSchema#',
+  rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
+  owl: 'http://www.w3.org/2002/07/owl#'
+}
 
 export class ImmutableDataFactory implements RDFJS.DataFactory {
 

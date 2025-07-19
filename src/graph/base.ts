@@ -6,7 +6,15 @@ import {
   ConstructQuery,
   SelectQuery, SparqlQuery
 } from 'sparqljs';
-import {NamedNode, BaseQuad, DefaultGraph, factory, Quad, Term} from '../rdf';
+import {
+  NamedNode,
+  BaseQuad,
+  DefaultGraph,
+  factory,
+  Quad,
+  Term,
+  globalPrefixMap
+} from '../rdf';
 import {BaseQuery, Bindings, ResultStream} from "@rdfjs/types";
 import * as rdfjs from "@rdfjs/types"
 import { Graph, PromiseOrValue } from '../graph';
@@ -39,6 +47,8 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
       }
       parsedQuery.from.default.push(this.iri);
     }
+
+    parsedQuery.prefixes = {...globalPrefixMap, ...parsedQuery.prefixes};
 
     return parsedQuery;
   }
