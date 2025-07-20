@@ -80,7 +80,7 @@ export class ChangeSetGraph extends BaseGraph<true> {
     require('fs').writeFileSync(path, content, 'utf8');
   }
 
-  resource<T extends Quad_Subject>(subject: T): resource.ResourceOf<T> {
+  resource<T extends rdfjs.Quad_Subject>(subject: T): resource.ResourceOf<T> {
     return resource.resource(this, subject);
   }
 
