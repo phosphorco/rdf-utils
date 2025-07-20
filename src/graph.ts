@@ -56,17 +56,17 @@ export async function skolemize(graph: WritableGraph<any>, prefix: string): Prom
     return nodes[bnode.value];
   }
 
-  const changeset = new ChangeSetGraph();
+  let changeset = new ChangeSetGraph();
+
   for(const q of await graph.quads()) {
     if(q.subject.termType === "BlankNode" || q.object.termType === "BlankNode") {
-      changeset.remove([q]);
       const newQ = factory.quad(
           q.subject.termType === "BlankNode" ? replace(q.subject) : q.subject,
           q.predicate,
           q.object.termType === "BlankNode" ? replace(q.object) : q.object,
           q.graph
       );
-      changeset.add([newQ]);
+      changeset = changeset.add([newQ]).remove([q]);
     }
   }
 

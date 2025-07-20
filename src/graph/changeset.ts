@@ -9,16 +9,17 @@ import * as n3 from 'n3';
 import * as resource from '../resource';
 
 export class ChangeSetGraph extends BaseGraph<true> {
-  private original: ImmutableSetGraph;
   public current: ImmutableSetGraph;
+  public added: Set<Quad>;
+  public removed: Set<Quad>;
 
   constructor(graph?: ImmutableSetGraph) {
     if(!graph) graph = new ImmutableSetGraph();
     super(graph.iri as NamedNode);
-    this.original = graph;
     this.current = graph;
+    this.added = Set<Quad>();
+    this.removed = Set<Quad>();
   }
-
 
   quads(): Iterable<Quad> {
     return this.current.quads();
@@ -33,45 +34,38 @@ export class ChangeSetGraph extends BaseGraph<true> {
   }
 
   add(quads: Iterable<rdfjs.Quad>): this {
-    this.current = this.current.add(quads);
+    const delta = [...quads].map(factory.fromQuad);
+    this.removed = this.removed.subtract(delta);
+    this.added = this.added.concat(delta);
+    this.current = this.current.add(delta);
     return this;
   }
 
   remove(quads: Iterable<rdfjs.Quad>): this {
-    this.current = this.current.remove(quads);
+    const delta = Set([...quads].map(factory.fromQuad));
+
+    // Add to removed, UNLESS they were present in added, in which case they are just removed from that
+    this.removed = this.removed.concat(delta.subtract(this.added));
+
+    this.added = this.added.subtract(delta);
+    this.current = this.current.remove(delta);
     return this;
   }
 
   deleteAll(): void {
-    this.current = new ImmutableSetGraph(this.iri as NamedNode);
-  }
-
-  /**
-   * Returns quads that have been added since the original state
-   */
-  added(): Set<Quad> {
-    return this.current.data.subtract(this.original.data);
-  }
-
-  /**
-   * Returns quads that have been removed since the original state
-   */
-  removed(): Set<Quad> {
-    return this.original.data.subtract(this.current.data);
+    this.remove(this.current.quads());
   }
 
   /**
    * Applies this changeset's delta to another graph
    */
   async applyDelta<T extends MutableGraph<any> | ImmutableGraph<any>>(other: T): Promise<T> {
-    const added = this.added();
-    const removed = this.removed();
-    
-    if (added.size > 0) {
-      other = await other.add(added) as T;
+
+    if (this.added.size > 0) {
+      other = await other.add(this.added) as T;
     }
-    if (removed.size > 0) {
-      other = await other.remove(removed) as T;
+    if (this.removed.size > 0) {
+      other = await other.remove(this.removed) as T;
     }
     
     return other;

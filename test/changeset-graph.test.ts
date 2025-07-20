@@ -12,8 +12,8 @@ describe('ChangeSetGraph - added() and removed() methods', () => {
     const baseGraph = new ImmutableSetGraph(EX.test);
     const changesetGraph = new ChangeSetGraph(baseGraph);
     
-    const added = changesetGraph.added();
-    const removed = changesetGraph.removed();
+    const added = changesetGraph.added;
+    const removed = changesetGraph.removed;
     
     expect(added.size).toBe(0);
     expect(removed.size).toBe(0);
@@ -27,8 +27,8 @@ describe('ChangeSetGraph - added() and removed() methods', () => {
     
     changesetGraph.add([newQuad]);
     
-    const added = changesetGraph.added();
-    const removed = changesetGraph.removed();
+    const added = changesetGraph.added;
+    const removed = changesetGraph.removed;
     
     expect(added.size).toBe(1);
     expect(removed.size).toBe(0);
@@ -48,8 +48,8 @@ describe('ChangeSetGraph - added() and removed() methods', () => {
     
     changesetGraph.remove([existingQuad]);
     
-    const added = changesetGraph.added();
-    const removed = changesetGraph.removed();
+    const added = changesetGraph.added;
+    const removed = changesetGraph.removed;
     
     expect(added.size).toBe(0);
     expect(removed.size).toBe(1);
@@ -72,8 +72,8 @@ describe('ChangeSetGraph - added() and removed() methods', () => {
     const newQuad = factory.quad(EX.new, EX.property, factory.literal('new value'));
     changesetGraph.add([newQuad]);
     
-    const added = changesetGraph.added();
-    const removed = changesetGraph.removed();
+    const added = changesetGraph.added;
+    const removed = changesetGraph.removed;
     
     expect(added.size).toBe(1);
     expect(removed.size).toBe(1);
@@ -93,16 +93,16 @@ describe('ChangeSetGraph - added() and removed() methods', () => {
     const quad2 = factory.quad(EX.second, EX.property, factory.literal('second value'));
     
     changesetGraph.add([quad1]);
-    expect(changesetGraph.added().size).toBe(1);
+    expect(changesetGraph.added.size).toBe(1);
     
     changesetGraph.add([quad2]);
-    expect(changesetGraph.added().size).toBe(2);
+    expect(changesetGraph.added.size).toBe(2);
     
     changesetGraph.remove([quad1]);
-    expect(changesetGraph.added().size).toBe(1);
-    expect(changesetGraph.removed().size).toBe(0);
+    expect(changesetGraph.added.size).toBe(1);
+    expect(changesetGraph.removed.size).toBe(0);
     
-    const addedQuad = [...changesetGraph.added()][0];
+    const addedQuad = [...changesetGraph.added][0];
     expect(addedQuad.subject.value).toBe('http://example.org/second');
   });
 });
