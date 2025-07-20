@@ -140,7 +140,7 @@ export const FOAF = namespace('http://xmlns.com/foaf/0.1/');
 export const SKOS = namespace('http://www.w3.org/2004/02/skos/core#');
 export const VCARD = namespace('http://www.w3.org/2006/vcard/ns#');
 
-export const globalPrefixMap = {
+export const globalPrefixMap: Record<string, string> = {
   xsd: 'http://www.w3.org/2001/XMLSchema#',
   rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
   rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
