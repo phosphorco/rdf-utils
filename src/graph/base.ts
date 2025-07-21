@@ -19,7 +19,7 @@ import {BaseQuery, Bindings, ResultStream} from "@rdfjs/types";
 import * as rdfjs from "@rdfjs/types"
 import { Graph, PromiseOrValue } from '../graph';
 import * as n3 from 'n3';
-import { writeFile, readFile } from 'fs/promises';
+import { writeFileSync, readFileSync } from 'fs';
 
 export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   iri: NamedNode | DefaultGraph;
@@ -122,7 +122,7 @@ export async function serializeQuads(quads: Iterable<Quad>, format?: string): Pr
 
 export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, format?: string): Promise<void> {
   const content = await serializeQuads(quads, format);
-  await writeFile(path, content, 'utf8');
+  writeFileSync(path, content, 'utf8');
 }
 
 export async function parseQuadsFromString(data: string, format?: string, baseIRI?: string): Promise<rdfjs.Quad[]> {
@@ -145,6 +145,6 @@ export async function parseQuadsFromString(data: string, format?: string, baseIR
 }
 
 export async function parseQuadsFromFile(path: string, format?: string): Promise<rdfjs.Quad[]> {
-  const content = await readFile(path, 'utf8');
+  const content = readFileSync(path, 'utf8');
   return parseQuadsFromString(content, format);
 }
