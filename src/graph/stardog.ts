@@ -56,7 +56,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
   async sparql(query: SparqlQuery): Promise<BaseQuery> {
     const generator = new Generator();
     const queryString = generator.stringify(query);
-    
+
     // Determine content type based on query type
     const contentType = (query as Query).queryType === 'CONSTRUCT' || (query as Query).queryType === 'DESCRIBE' 
       ? 'application/n-triples' 
@@ -70,13 +70,14 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
         this.transactionId, 
         queryString, 
         { accept: contentType as any },
-        {}
+        {reasoning: this.reasoning}
       ) :
       await stardog.query.execute(
         this.connection, 
         this.config.database, 
         queryString, 
-        contentType as any
+        contentType as any,
+        {reasoning: this.reasoning}
       );
 
     if (!result.ok) {
@@ -132,13 +133,14 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
           this.transactionId,
           queryString,
           { accept: 'application/n-triples' },
-          {}
+          {reasoning: this.reasoning}
         ) :
         await stardog.query.execute(
           this.connection,
           this.config.database,
           queryString,
-          'application/n-triples'
+          'application/n-triples',
+          {reasoning: this.reasoning}
         );
 
       if (!constructResult.ok) {

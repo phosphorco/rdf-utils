@@ -30,8 +30,8 @@ const timeout = parseInt(process.env.STARDOG_TIMEOUT || '30000');
 const testGraphIri = factory.namedNode('http://test.example.org/integration/graph');
 
 // Helper to create a clean test graph
-async function createTestGraph(): Promise<StardogGraph> {
-  const graph = new StardogGraph(config, testGraphIri, reasoning);
+async function createTestGraph(enableReasoning: boolean = false): Promise<StardogGraph> {
+  const graph = new StardogGraph(config, testGraphIri, enableReasoning);
   
   // ALWAYS clean up before test starts - don't trust previous test cleanup
   try {
@@ -82,7 +82,7 @@ describe('Stardog Integration Tests', () => {
   afterAll(async () => {
     // Clean up test graph
     try {
-      const graph = new StardogGraph(config, testGraphIri, reasoning);
+      const graph = new StardogGraph(config, testGraphIri, false);
       await graph.deleteAll();
     } catch (err) {
       // Best effort cleanup
@@ -290,8 +290,8 @@ describe('Stardog Integration Tests', () => {
       const graph1Iri = factory.namedNode('http://test.example.org/graph1');
       const graph2Iri = factory.namedNode('http://test.example.org/graph2');
       
-      const graph1 = new StardogGraph(config, graph1Iri, reasoning);
-      const graph2 = new StardogGraph(config, graph2Iri, reasoning);
+      const graph1 = new StardogGraph(config, graph1Iri, false);
+      const graph2 = new StardogGraph(config, graph2Iri, false);
       
       try {
         // Clean up
@@ -327,6 +327,123 @@ describe('Stardog Integration Tests', () => {
         // Clean up
         try { await graph1.deleteAll(); } catch {}
         try { await graph2.deleteAll(); } catch {}
+      }
+    });
+
+    test('should support reasoning in SPARQL queries outside transaction', async () => {
+      const graph = await createTestGraph(true);
+      
+      // Create schema graph for Stardog reasoning
+      const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+      const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+      
+      try {
+        // Clean up schema graph
+        try { await schemaGraph.deleteAll(); } catch {}
+        
+        // Add schema (class hierarchy) to the schema graph
+        const schemaTriples = [
+          factory.quad(
+            factory.namedNode('http://example.org/Employee'),
+            factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+            factory.namedNode('http://xmlns.com/foaf/0.1/Person')
+          )
+        ];
+        
+        await schemaGraph.add(schemaTriples);
+        
+        // Add instance data to the regular graph
+        const instanceTriples = [
+          factory.quad(
+            factory.namedNode('http://example.org/John'),
+            factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+            factory.namedNode('http://example.org/Employee')
+          )
+        ];
+        
+        await graph.add(instanceTriples);
+        
+        // Test reasoning: if reasoning is enabled, John should be inferred to be a Person
+        // because Employee subClassOf Person and John is an Employee
+        const sparql = `
+          PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+          ASK WHERE {
+            <http://example.org/John> a foaf:Person .
+          }
+        `;
+        
+        const result = await graph.ask(sparql);
+
+        expect(result).toBe(true);
+
+      } finally {
+        await graph.deleteAll();
+        try { await schemaGraph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should support reasoning in SPARQL queries inside transaction', async () => {
+      const graph = await createTestGraph(true);
+      
+      // Create schema graph for Stardog reasoning
+      const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+      const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+      
+      try {
+        // Clean up and setup schema outside of transaction
+        try { await schemaGraph.deleteAll(); } catch {}
+        
+        // Add schema (class hierarchy) to the schema graph
+        const schemaTriples = [
+          factory.quad(
+            factory.namedNode('http://example.org/Manager'),
+            factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+            factory.namedNode('http://xmlns.com/foaf/0.1/Person')
+          )
+        ];
+        
+        await schemaGraph.add(schemaTriples);
+        
+        // Now start transaction for instance data
+        await graph.begin();
+        
+        // Add instance data within transaction
+        const instanceTriples = [
+          factory.quad(
+            factory.namedNode('http://example.org/Jane'),
+            factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+            factory.namedNode('http://example.org/Manager')
+          )
+        ];
+        
+        await graph.add(instanceTriples);
+        
+        // Test reasoning within transaction
+        const sparql = `
+          PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+          ASK WHERE {
+            <http://example.org/Jane> a foaf:Person .
+          }
+        `;
+        
+        const result = await graph.ask(sparql);
+
+        expect(result).toBe(true);
+
+        await graph.commit();
+        
+        // Test reasoning still works after commit
+        const resultAfterCommit = await graph.ask(sparql);
+        console.log(`Reasoning ${reasoning ? 'enabled' : 'disabled'}: Query result after commit = ${resultAfterCommit}`);
+
+        expect(resultAfterCommit).toBe(true);
+
+      } catch (error) {
+        try { await graph.rollback(); } catch {}
+        throw error;
+      } finally {
+        await graph.deleteAll();
+        try { await schemaGraph.deleteAll(); } catch {}
       }
     });
   });
