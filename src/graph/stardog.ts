@@ -57,44 +57,21 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     const generator = new Generator();
     const queryString = generator.stringify(query);
 
-    // Determine content type based on query type
-    const contentType = (query as Query).queryType === 'CONSTRUCT' || (query as Query).queryType === 'DESCRIBE' 
-      ? 'application/n-triples' 
-      : 'application/sparql-results+json';
-    
-    // Execute query based on type
-    const result = this.transactionId ? 
-      await stardog.query.executeInTransaction(
-        this.connection, 
-        this.config.database, 
-        this.transactionId, 
-        queryString, 
-        { accept: contentType as any },
-        {reasoning: this.reasoning}
-      ) :
-      await stardog.query.execute(
-        this.connection, 
-        this.config.database, 
-        queryString, 
-        contentType as any,
-        {reasoning: this.reasoning}
-      );
-
-    if (!result.ok) {
-      throw new Error(`Query failed: ${result.statusText}`);
-    }
-
     // Check if this is an Update query (not supported)
     if ('updateType' in query) {
       throw new Error('Update queries are not supported. Use add/delete methods instead.');
     }
 
+    const queryType = (query as Query).queryType;
+    const contentType = this.getContentType(queryType);
+    
+    const result = await this.executeQuery(queryString, contentType);
+
     // Return appropriate BaseQuery based on query type
-    if ((query as Query).queryType === 'SELECT') {
+    if (queryType === 'SELECT') {
       return {
         resultType: 'bindings',
         execute: async () => {
-          // Convert bindings to Map format and return as stream
           const bindings = result.body.results.bindings.map((binding: any) => {
             const bindingMap = new Map();
             Object.keys(binding).forEach(key => {
@@ -103,88 +80,27 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
             return bindingMap;
           });
           
-          // Return a mock stream that base.ts expects
-          const stream = {
-            on: (event: string, handler: Function) => {
-              if (event === 'data') {
-                bindings.forEach((binding: any) => handler(binding));
-              } else if (event === 'end') {
-                setTimeout(() => handler(), 0);
-              } else if (event === 'error') {
-                // Store error handler for potential use
-              }
-              return stream;
-            }
-          };
-          return stream as any;
+          return this.createMockStream(bindings, (binding: any) => binding);
         }
       };
-    } else if ((query as Query).queryType === 'ASK') {
+    } else if (queryType === 'ASK') {
       return {
         resultType: 'boolean',
         execute: async () => result.body.boolean
       };
-    } else if ((query as Query).queryType === 'CONSTRUCT') {
-      // For CONSTRUCT queries, we need to parse the result as N-Triples
-      const constructResult = this.transactionId ?
-        await stardog.query.executeInTransaction(
-          this.connection,
-          this.config.database,
-          this.transactionId,
-          queryString,
-          { accept: 'application/n-triples' },
-          {reasoning: this.reasoning}
-        ) :
-        await stardog.query.execute(
-          this.connection,
-          this.config.database,
-          queryString,
-          'application/n-triples',
-          {reasoning: this.reasoning}
-        );
-
-      if (!constructResult.ok) {
-        throw new Error(`CONSTRUCT query failed: ${constructResult.statusText}`);
-      }
-
-      // Parse N-Triples and create a readable stream
-      const parser = new N3.Parser({ format: 'N-Triples' });
-      const quads: Quad[] = [];
-
-      if (constructResult.body && typeof constructResult.body === 'string') {
-        await new Promise<void>((resolve, reject) => {
-          parser.parse(constructResult.body as string, (error, quad) => {
-            if (error) {
-              reject(error);
-            } else if (quad) {
-              quads.push(factory.fromQuad(quad));
-            } else {
-              resolve();
-            }
-          });
-        });
-      }
+    } else if (queryType === 'CONSTRUCT') {
+      const constructResult = await this.executeQuery(queryString, 'application/n-triples');
+      const quads = await this.parseNTriplesResult(constructResult);
 
       return {
         resultType: 'quads',
         execute: async () => {
-          // Return a mock stream-like object
-          const stream = {
-            on: (event: string, handler: Function) => {
-              if (event === 'data') {
-                quads.forEach(quad => handler(quad));
-              } else if (event === 'end') {
-                setTimeout(() => handler(), 0);
-              }
-              return stream;
-            }
-          };
-          return stream as any;
+          return this.createMockStream(quads, (quad: Quad) => quad);
         }
       };
     }
 
-    throw new Error(`Unsupported query type: ${(query as Query).queryType}`);
+    throw new Error(`Unsupported query type: ${queryType}`);
   }
 
   async quads(): Promise<Iterable<Quad>> {
@@ -193,7 +109,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       `SELECT * WHERE { GRAPH <${graphIri}> { ?s ?p ?o } }` :
       `SELECT * WHERE { ?s ?p ?o }`;
     
-    const result = await this.executeSparqlQuery(sparql);
+    const result = await this.executeQuery(sparql, 'application/sparql-results+json', false);
     
     const quads: Quad[] = [];
     if (result.body?.results?.bindings) {
@@ -282,50 +198,12 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
   }
 
   async add(quads: Iterable<Quad>): Promise<this> {
-    const quadArray = Array.from(quads);
-    if (quadArray.length === 0) {
-      return this;
-    }
-    
-    // Serialize quads with proper graph context
-    const quadWithGraph = quadArray.map(quad => {
-      const graphIri = this.iri.termType === 'DefaultGraph' ? factory.defaultGraph() : this.iri;
-      return factory.quad(quad.subject, quad.predicate, quad.object, graphIri);
-    });
-    
-    const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
-    
-    await this.executeWithTransaction(async (txId) => {
-      // @ts-expect-error - Stardog types require encoding but omitting it works
-      await stardog.db.add(this.connection, this.config.database, txId, nquads, { 
-        contentType: 'application/n-quads' 
-      });
-    });
-
+    await this.processQuads(quads, 'add');
     return this;
   }
 
   async remove(quads: Iterable<Quad>): Promise<this> {
-    const quadArray = Array.from(quads);
-    if (quadArray.length === 0) {
-      return this;
-    }
-    
-    // Serialize quads with proper graph context
-    const quadWithGraph = quadArray.map(quad => {
-      const graphIri = this.iri.termType === 'DefaultGraph' ? factory.defaultGraph() : this.iri;
-      return factory.quad(quad.subject, quad.predicate, quad.object, graphIri);
-    });
-    
-    const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
-    
-    await this.executeWithTransaction(async (txId) => {
-      // @ts-expect-error - Stardog types require encoding but omitting it works
-      await stardog.db.remove(this.connection, this.config.database, txId, nquads, { 
-        contentType: 'application/n-quads' 
-      });
-    });
-
+    await this.processQuads(quads, 'remove');
     return this;
   }
 
@@ -405,26 +283,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     return responseText.trim();
   }
 
-  /**
-   * Execute SPARQL query with proper transaction handling
-   */
-  private async executeSparqlQuery(sparql: string): Promise<any> {
-    return this.transactionId ? 
-      await stardog.query.executeInTransaction(
-        this.connection, 
-        this.config.database, 
-        this.transactionId, 
-        sparql, 
-        { accept: 'application/sparql-results+json' as any }, 
-        {}
-      ) :
-      await stardog.query.execute(
-        this.connection, 
-        this.config.database, 
-        sparql, 
-        'application/sparql-results+json' as any
-      );
-  }
+
 
 
 
@@ -437,5 +296,118 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     } else {
       throw new Error('Cannot delete all quads from default graph');
     }
+  }
+
+  /**
+   * Unified query execution handling both transaction and non-transaction cases
+   */
+  private async executeQuery(queryString: string, contentType: string, reasoning?: boolean): Promise<any> {
+
+    const isReasoning = reasoning !== undefined ? reasoning : this.reasoning;
+    const result = this.transactionId ?
+      await stardog.query.executeInTransaction(
+        this.connection, 
+        this.config.database, 
+        this.transactionId, 
+        queryString, 
+        { accept: contentType as any },
+        {reasoning: isReasoning}
+      ) :
+      await stardog.query.execute(
+        this.connection, 
+        this.config.database, 
+        queryString, 
+        contentType as any,
+        {reasoning: isReasoning}
+      );
+
+    if (!result.ok) {
+      throw new Error(`Query failed: ${result.statusText}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Create a mock stream that base.ts expects
+   */
+  private createMockStream(items: any[], itemHandler: (item: any) => any): any {
+    const stream = {
+      on: (event: string, handler: Function) => {
+        if (event === 'data') {
+          items.forEach(item => handler(itemHandler(item)));
+        } else if (event === 'end') {
+          setTimeout(() => handler(), 0);
+        } else if (event === 'error') {
+          // Store error handler for potential use
+        }
+        return stream;
+      }
+    };
+    return stream as any;
+  }
+
+  /**
+   * Parse N-Triples result into Quad array
+   */
+  private async parseNTriplesResult(result: any): Promise<Quad[]> {
+    const parser = new N3.Parser({ format: 'N-Triples' });
+    const quads: Quad[] = [];
+
+    if (result.body && typeof result.body === 'string') {
+      await new Promise<void>((resolve, reject) => {
+        parser.parse(result.body as string, (error, quad) => {
+          if (error) {
+            reject(error);
+          } else if (quad) {
+            quads.push(factory.fromQuad(quad));
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
+
+    return quads;
+  }
+
+  /**
+   * Apply graph context to quads
+   */
+  private applyGraphContext(quads: Quad[]): Quad[] {
+    return quads.map(quad => {
+      const graphIri = this.iri.termType === 'DefaultGraph' ? factory.defaultGraph() : this.iri;
+      return factory.quad(quad.subject, quad.predicate, quad.object, graphIri);
+    });
+  }
+
+  /**
+   * Get content type based on query type
+   */
+  private getContentType(queryType: string): string {
+    return queryType === 'CONSTRUCT' || queryType === 'DESCRIBE' 
+      ? 'application/n-triples' 
+      : 'application/sparql-results+json';
+  }
+
+  /**
+   * Process quads for add/remove operations
+   */
+  private async processQuads(quads: Iterable<Quad>, operation: 'add' | 'remove'): Promise<void> {
+    const quadArray = Array.from(quads);
+    if (quadArray.length === 0) {
+      return;
+    }
+    
+    const quadWithGraph = this.applyGraphContext(quadArray);
+    const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
+    
+    await this.executeWithTransaction(async (txId) => {
+      const dbOperation = operation === 'add' ? stardog.db.add : stardog.db.remove;
+      // @ts-expect-error - Stardog types require encoding but omitting it works
+      await dbOperation(this.connection, this.config.database, txId, nquads, { 
+        contentType: 'application/n-quads' 
+      });
+    });
   }
 }

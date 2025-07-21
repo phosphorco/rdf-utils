@@ -40,6 +40,9 @@ async function createTestGraph(enableReasoning: boolean = false): Promise<Stardo
     // Verify cleanup worked - FAIL if it didn't
     const remainingQuads = [...await graph.quads()];
     if (remainingQuads.length > 0) {
+      for(const quad of remainingQuads) {
+        console.log(quad);
+      }
       throw new Error(`Test graph cleanup FAILED: ${remainingQuads.length} quads remain after deleteAll(). Test cannot proceed with dirty state.`);
     }
   } catch (err) {
