@@ -127,8 +127,29 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
 export async function serializeQuads(quads: Iterable<Quad>, options?: { format?: string, prefixes?: any, baseIRI?: string }): Promise<string> {
   const format = options?.format;
   const prefixes = {...globalPrefixMap, ...options?.prefixes };
-  const baseIRI = options?.baseIRI;
-  return new n3.Writer({ format, prefixes, baseIRI }).quadsToString([...quads]);
+  if(options?.baseIRI) {
+    prefixes[""] = options.baseIRI;
+  }
+
+  const quadArray = [...quads];
+
+  quadArray.sort((a, b) => {
+    if(a.graph.value != b.graph.value) return a.graph.value.localeCompare(b.graph.value);
+    if(a.subject.value != b.subject.value) return a.subject.value.localeCompare(b.subject.value);
+    if(a.predicate.value != b.predicate.value) return a.predicate.value.localeCompare(b.predicate.value);
+    return 0;
+  })
+
+  const writer = new n3.Writer({ format, prefixes });
+
+  for(const quad of quadArray) {
+    writer.addQuad(quad);
+  }
+
+  return new Promise((resolve, reject) =>
+      writer.end((error, result) => (error ? reject(error) : resolve(result)))
+  );
+
 }
 
 export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, options?: { format?: string, prefixes?: any, baseIRI?: string }): Promise<void> {
