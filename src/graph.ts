@@ -17,8 +17,8 @@ export interface Graph<IsSync> {
   construct(query: ConstructQuery | string): Promise<Graph<true>>;
   
   // Serialization methods
-  toString(format?: string): PromiseOrValue<string, IsSync>;
-  saveToFile(path: string, format?: string): PromiseOrValue<void, IsSync>;
+  toString(options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<string, IsSync>;
+  saveToFile(path: string, options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<void, IsSync>;
 }
 
 export interface MutableGraph<IsSync> extends Graph<IsSync> {

@@ -291,7 +291,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       return factory.quad(quad.subject, quad.predicate, quad.object, graphIri);
     });
     
-    const nquads = await serializeQuads(quadWithGraph, 'N-Quads');
+    const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
     
     await this.executeWithTransaction(async (txId) => {
       // @ts-expect-error - Stardog types require encoding but omitting it works
@@ -315,7 +315,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       return factory.quad(quad.subject, quad.predicate, quad.object, graphIri);
     });
     
-    const nquads = await serializeQuads(quadWithGraph, 'N-Quads');
+    const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
     
     await this.executeWithTransaction(async (txId) => {
       // @ts-expect-error - Stardog types require encoding but omitting it works
@@ -424,13 +424,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       );
   }
 
-  async toString(format?: string): Promise<string> {
-    return serializeQuads(await this.quads(), format);
-  }
 
-  async saveToFile(path: string, format?: string): Promise<void> {
-    return saveQuadsToFile(await this.quads(), path, format);
-  }
 
   /**
    * Delete all quads from this graph

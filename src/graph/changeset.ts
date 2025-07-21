@@ -71,14 +71,7 @@ export class ChangeSetGraph extends BaseGraph<true> {
     return other;
   }
 
-  toString(format?: string): string {
-    return new n3.Writer({ format }).quadsToString([...this.quads()]);
-  }
 
-  saveToFile(path: string, format?: string): void {
-    const content = new n3.Writer({ format }).quadsToString([...this.quads()]);
-    require('fs').writeFileSync(path, content, 'utf8');
-  }
 
   resource<T extends rdfjs.Quad_Subject>(subject: T): resource.ResourceOf<T> {
     return resource.resource(this, subject);

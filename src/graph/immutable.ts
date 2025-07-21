@@ -68,14 +68,7 @@ export class ImmutableSetGraph extends BaseGraph<true> implements ImmutableGraph
     return new ImmutableSetGraph(this.iri as NamedNode, newQuadsSet) as this;
   }
 
-  toString(format?: string): string {
-    return new n3.Writer({ format }).quadsToString([...this.quads()]);
-  }
 
-  saveToFile(path: string, format?: string): void {
-    const content = new n3.Writer({ format }).quadsToString([...this.quads()]);
-    require('fs').writeFileSync(path, content, 'utf8');
-  }
 
   equals(other: unknown): boolean {
     if (!(other instanceof ImmutableSetGraph)) return false;

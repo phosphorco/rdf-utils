@@ -69,14 +69,7 @@ export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
     }
   }
 
-  toString(format?: string): string {
-    return new n3.Writer({ format }).quadsToString([...this.quads()]);
-  }
 
-  saveToFile(path: string, format?: string): void {
-    const content = new n3.Writer({ format }).quadsToString([...this.quads()]);
-    require('fs').writeFileSync(path, content, 'utf8');
-  }
 
   static async fromString(data: string, format?: string, baseIRI?: string): Promise<N3Graph> {
     const graph = new N3Graph();

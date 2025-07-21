@@ -98,30 +98,41 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
     })
   }
 
-  abstract toString(format?: string): PromiseOrValue<string, IsSync>;
-  abstract saveToFile(path: string, format?: string): PromiseOrValue<void, IsSync>;
+  toString(options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<string, IsSync> {
+    const baseIRI = options?.baseIRI || (this.iri.termType === 'NamedNode' ? this.iri.value : undefined);
+    const quads = this.quads();
+    
+    if (quads instanceof Promise) {
+      return quads.then(q => serializeQuads(q, { ...options, baseIRI })) as PromiseOrValue<string, IsSync>;
+    } else {
+      return serializeQuads(quads, { ...options, baseIRI }) as PromiseOrValue<string, IsSync>;
+    }
+  }
+
+  saveToFile(path: string, options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<void, IsSync> {
+    const baseIRI = options?.baseIRI || (this.iri.termType === 'NamedNode' ? this.iri.value : undefined);
+    const quads = this.quads();
+    
+    if (quads instanceof Promise) {
+      return quads.then(q => saveQuadsToFile(q, path, { ...options, baseIRI })) as PromiseOrValue<void, IsSync>;
+    } else {
+      return saveQuadsToFile(quads, path, { ...options, baseIRI }) as PromiseOrValue<void, IsSync>;
+    }
+  }
 
 }
 
 // Helper functions for implementations to use
 
-export async function serializeQuads(quads: Iterable<Quad>, format?: string): Promise<string> {
-  const writer = new n3.Writer({ format });
-  
-  return new Promise((resolve, reject) => {
-    writer.addQuads([...quads]);
-    writer.end((error, result) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
+export async function serializeQuads(quads: Iterable<Quad>, options?: { format?: string, prefixes?: any, baseIRI?: string }): Promise<string> {
+  const format = options?.format;
+  const prefixes = {...globalPrefixMap, ...options?.prefixes };
+  const baseIRI = options?.baseIRI;
+  return new n3.Writer({ format, prefixes, baseIRI }).quadsToString([...quads]);
 }
 
-export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, format?: string): Promise<void> {
-  const content = await serializeQuads(quads, format);
+export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, options?: { format?: string, prefixes?: any, baseIRI?: string }): Promise<void> {
+  const content = await serializeQuads(quads, options);
   writeFileSync(path, content, 'utf8');
 }
 
