@@ -31,7 +31,11 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     this.config = config;
     this.transactionId = null;
     this.reasoning = reasoning || false;
-    this.connection = new stardog.Connection({
+    this.connection = StardogGraph.getConnection(config);
+  }
+
+  static getConnection(config: StardogConfig): stardog.Connection {
+    return new stardog.Connection({
       username: config.username,
       password: config.password,
       endpoint: config.endpoint
