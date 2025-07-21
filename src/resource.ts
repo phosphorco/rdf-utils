@@ -3,8 +3,8 @@ import { factory } from './rdf';
 import { NamedNode, Quad_Subject, Term } from '@rdfjs/types';
 
 class Resource<T extends Quad_Subject> {
-  private changeset: ChangeSetGraph;
-  private subject: T;
+  public changeset: ChangeSetGraph;
+  public subject: T;
 
   public get termType() { return this.subject.termType }
   public get value() { return this.subject.value; }

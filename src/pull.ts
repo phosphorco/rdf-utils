@@ -33,7 +33,7 @@ export type ConstraintExpr = [NamedNode, ConstraintValue];
 export type PullExpr = PullExprProperty[];
 export type PullExprProperty = NamedNode | '*' | RecurseExpr | NestedExpr | ConstraintExpr;
 
-export async function pull(graph: Graph<any>, pull: PullExpr, startingResource?: NamedNode): Promise<Graph<true>> {
+export async function pull(graph: Graph<any>, pull: PullExpr, startingResource?: NamedNode): Promise<ImmutableSetGraph> {
 
   const root = startingResource || getVar('root');
   const { patterns, template } = build(pull, root);
