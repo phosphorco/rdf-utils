@@ -21,8 +21,8 @@ export interface StardogConfig {
  * Stardog implementation of MutableGraph with transaction support
  */
 export class StardogGraph extends BaseGraph<false> implements MutableGraph<false>, TransactionalGraph<false> {
-  private config: StardogConfig;
-  private connection: stardog.Connection;
+  public config: StardogConfig;
+  public connection: stardog.Connection;
   private transactionId: string | null = null;
   private readonly reasoning: boolean;
 
