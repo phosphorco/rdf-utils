@@ -78,7 +78,7 @@ const config = {
   database: 'mydb'
 };
 
-const graph = new StardogGraph(EX.graph, config);
+const graph = new StardogGraph(config, EX.graph);
 
 // Add data with transactions
 await graph.begin();
@@ -86,7 +86,7 @@ await graph.add([quad]);
 await graph.commit();
 
 // Query with reasoning
-const reasoningGraph = new StardogGraph(EX.graph, config, true);
+const reasoningGraph = new StardogGraph(config, EX.graph, true);
 ```
 
 #### Immutable Graph

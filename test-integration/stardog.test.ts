@@ -31,7 +31,7 @@ const testGraphIri = factory.namedNode('http://test.example.org/integration/grap
 
 // Helper to create a clean test graph
 async function createTestGraph(): Promise<StardogGraph> {
-  const graph = new StardogGraph(testGraphIri, config, reasoning);
+  const graph = new StardogGraph(config, testGraphIri, reasoning);
   
   // ALWAYS clean up before test starts - don't trust previous test cleanup
   try {
@@ -82,7 +82,7 @@ describe('Stardog Integration Tests', () => {
   afterAll(async () => {
     // Clean up test graph
     try {
-      const graph = new StardogGraph(testGraphIri, config, reasoning);
+      const graph = new StardogGraph(config, testGraphIri, reasoning);
       await graph.deleteAll();
     } catch (err) {
       // Best effort cleanup
@@ -133,14 +133,165 @@ describe('Stardog Integration Tests', () => {
    // Stardog-specific tests
   describe('Stardog-specific functionality', () => {
 
+    test('should execute operations within a transaction successfully', async () => {
+      const graph = await createTestGraph();
+      
+      const testQuad = factory.quad(
+        factory.namedNode('http://example.org/test'),
+        factory.namedNode('http://example.org/property'),
+        factory.literal('test value')
+      );
+      
+      // Execute add operation within transaction
+      await graph.inTransaction(async (txGraph) => {
+        await txGraph.add([testQuad]);
+      });
+      
+      // Verify data was committed
+      const quads = [...await graph.quads()];
+      expect(quads.length).toBe(1);
+      expect(quads[0].object.value).toBe('test value');
+      
+      // Clean up
+      await graph.deleteAll();
+    });
+
+    test('should rollback transaction on error', async () => {
+      const graph = await createTestGraph();
+      
+      const testQuad = factory.quad(
+        factory.namedNode('http://example.org/test'),
+        factory.namedNode('http://example.org/property'),
+        factory.literal('test value')
+      );
+      
+      try {
+        await graph.inTransaction(async (txGraph) => {
+          await txGraph.add([testQuad]);
+          // Force an error to trigger rollback
+          throw new Error('Test error to trigger rollback');
+        });
+      } catch (err) {
+        expect(err.message).toBe('Test error to trigger rollback');
+      }
+      
+      // Verify data was rolled back
+      const quads = [...await graph.quads()];
+      expect(quads.length).toBe(0);
+    });
+
+    test('should handle multiple operations within single transaction', async () => {
+      const graph = await createTestGraph();
+      
+      const quad1 = factory.quad(
+        factory.namedNode('http://example.org/item1'),
+        factory.namedNode('http://example.org/property'),
+        factory.literal('value 1')
+      );
+      
+      const quad2 = factory.quad(
+        factory.namedNode('http://example.org/item2'),
+        factory.namedNode('http://example.org/property'),
+        factory.literal('value 2')
+      );
+      
+      const quad3 = factory.quad(
+        factory.namedNode('http://example.org/item3'),
+        factory.namedNode('http://example.org/property'),
+        factory.literal('value 3')
+      );
+      
+      // Execute multiple operations within single transaction
+      await graph.inTransaction(async (txGraph) => {
+        await txGraph.add([quad1, quad2]);
+        await txGraph.add([quad3]);
+        await txGraph.remove([quad2]); // Remove one quad
+      });
+      
+      // Verify final state
+      const quads = [...await graph.quads()];
+      expect(quads.length).toBe(2);
+      
+      const values = quads.map(q => q.object.value).sort();
+      expect(values).toEqual(['value 1', 'value 3']);
+      
+      // Clean up
+      await graph.deleteAll();
+    });
+
+    test('should not allow nested transactions', async () => {
+      const graph = await createTestGraph();
+      
+      try {
+        await graph.inTransaction(async (txGraph) => {
+          // This should fail since we're already in a transaction
+          await expect(txGraph.inTransaction(async () => {})).rejects.toThrow('Transaction already in progress');
+        });
+      } catch (err) {
+        // Transaction should still rollback properly
+      }
+      
+      // Verify graph is still clean
+      const quads = [...await graph.quads()];
+      expect(quads.length).toBe(0);
+    });
+
+    test('should handle SPARQL operations within transaction', async () => {
+      const graph = await createTestGraph();
+      
+      const testQuad = factory.quad(
+        factory.namedNode('http://example.org/person'),
+        factory.namedNode('http://example.org/name'),
+        factory.literal('John Doe')
+      );
+      
+      await graph.inTransaction(async (txGraph) => {
+        await txGraph.add([testQuad]);
+        
+        // Execute SPARQL query within the same transaction
+        const selectQuery = {
+          queryType: 'SELECT' as const,
+          type: 'query' as const,
+          prefixes: {},
+          variables: [factory.variable('name') as any],
+          from: {default: [testGraphIri], named: []},
+          where: [{
+            type: 'bgp' as const,
+            triples: [{
+              subject: factory.namedNode('http://example.org/person') as any,
+              predicate: factory.namedNode('http://example.org/name') as any,
+              object: factory.variable('name') as any
+            }]
+          }]
+        };
+        
+        const result = await txGraph.sparql(selectQuery);
+        expect(result.resultType).toBe('bindings');
+        
+        // Execute the query and check results
+        const stream = await result.execute();
+        const bindings: any[] = [];
+        
+        await new Promise<void>((resolve) => {
+          stream.on('data', (binding: any) => bindings.push(binding));
+          stream.on('end', () => resolve());
+        });
+        
+        expect(bindings.length).toBe(1);
+        expect(bindings[0].get('name').value).toBe('John Doe');
+      });
+      
+      // Clean up
+      await graph.deleteAll();
+    });
 
     test('should handle graph-specific operations', async () => {
       // Create a separate graph for this test
       const graph1Iri = factory.namedNode('http://test.example.org/graph1');
       const graph2Iri = factory.namedNode('http://test.example.org/graph2');
       
-      const graph1 = new StardogGraph(graph1Iri, config, reasoning);
-      const graph2 = new StardogGraph(graph2Iri, config, reasoning);
+      const graph1 = new StardogGraph(config, graph1Iri, reasoning);
+      const graph2 = new StardogGraph(config, graph2Iri, reasoning);
       
       try {
         // Clean up

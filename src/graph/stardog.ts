@@ -1,6 +1,6 @@
-import { BaseQuad, Bindings, BaseQuery, Term } from '@rdfjs/types';
+import {BaseQuad, Bindings, BaseQuery, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types'
-import { NamedNode, factory, Quad } from '../rdf';
+import { NamedNode, DefaultGraph, factory, Quad } from '../rdf';
 import { MutableGraph, TransactionalGraph } from '../graph';
 import { BaseGraph, serializeQuads, saveQuadsToFile } from './base';
 import { Query, Generator, SparqlQuery, SelectQuery, ConstructQuery } from 'sparqljs';
@@ -23,10 +23,10 @@ export interface StardogConfig {
 export class StardogGraph extends BaseGraph<false> implements MutableGraph<false>, TransactionalGraph<false> {
   public config: StardogConfig;
   public connection: stardog.Connection;
-  private transactionId: string | null = null;
-  private readonly reasoning: boolean;
+  public transactionId: string | null = null;
+  public readonly reasoning: boolean;
 
-  constructor(iri: NamedNode, config: StardogConfig, reasoning?: boolean) {
+  constructor(config: StardogConfig, iri?: NamedNode | DefaultGraph, reasoning?: boolean) {
     super(iri);
     this.config = config;
     this.transactionId = null;
@@ -40,6 +40,17 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       password: config.password,
       endpoint: config.endpoint
     });
+  }
+
+  async inTransaction(fn: (graph: StardogGraph) => Promise<void>): Promise<void> {
+    try {
+      await this.begin();
+      await fn(this);
+      await this.commit();
+    } catch (err) {
+      await this.rollback();
+      throw err;
+    }
   }
 
   async sparql(query: SparqlQuery): Promise<BaseQuery> {
@@ -411,13 +422,6 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
         sparql, 
         'application/sparql-results+json' as any
       );
-  }
-
-  /**
-   * Create a new transactional graph instance
-   */
-  createTransaction(reasoning?: boolean): StardogGraph {
-    return new StardogGraph(this.iri as NamedNode, this.config, reasoning);
   }
 
   async toString(format?: string): Promise<string> {
