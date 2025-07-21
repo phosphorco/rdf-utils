@@ -35,6 +35,16 @@ class Resource<T extends Quad_Subject> {
     return this;
   }
 
+  add(predicate: NamedNode, value: ResourceValue): this {
+
+    // Add new value
+    const term = factory.fromJs(value);
+    const quad = factory.quad(this.subject, predicate, term);
+    this.changeset.add([quad]);
+
+    return this;
+  }
+
   get(predicate: NamedNode): ResourceValue | undefined {
     const quads = [...this.changeset.find(this.subject, predicate, null)];
     if (quads.length === 0) return undefined;

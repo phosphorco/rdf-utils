@@ -163,4 +163,59 @@ describe('Resource', () => {
     const results = [...resource.getAll(EX.skill)];
     expect(results).toEqual([]);
   });
+
+  test('should add values without replacing existing ones', () => {
+    const changeset = new ChangeSetGraph(new ImmutableSetGraph());
+    const resource = makeResource(changeset, EX.alice);
+    
+    resource.add(EX.skill, 'TypeScript');
+    resource.add(EX.skill, 'RDF');
+    resource.add(EX.skill, 'SPARQL');
+    
+    const skills = [...resource.getAll(EX.skill)];
+    expect(skills).toEqual(['TypeScript', 'RDF', 'SPARQL']);
+  });
+
+  test('should add values preserving existing ones from set', () => {
+    const changeset = new ChangeSetGraph(new ImmutableSetGraph());
+    const resource = makeResource(changeset, EX.alice);
+    
+    resource.set(EX.skill, 'TypeScript');
+    resource.add(EX.skill, 'RDF');
+    resource.add(EX.skill, 'SPARQL');
+    
+    const skills = [...resource.getAll(EX.skill)];
+    expect(skills).toEqual(['TypeScript', 'RDF', 'SPARQL']);
+  });
+
+  test('should support fluent chaining with add method', () => {
+    const changeset = new ChangeSetGraph(new ImmutableSetGraph());
+    const resource = makeResource(changeset, EX.alice);
+    
+    const result = resource
+      .add(EX.skill, 'TypeScript')
+      .add(EX.skill, 'RDF')
+      .add(FOAF.name, 'Alice Smith');
+    
+    expect(result).toBe(resource);
+    const skills = [...resource.getAll(EX.skill)];
+    expect(skills).toEqual(['TypeScript', 'RDF']);
+    expect(resource.get(FOAF.name)).toBe('Alice Smith');
+  });
+
+  test('should add different types of values', () => {
+    const changeset = new ChangeSetGraph(new ImmutableSetGraph());
+    const resource = makeResource(changeset, EX.alice);
+    
+    resource.add(EX.score, 95);
+    resource.add(EX.score, 87.5);
+    resource.add(EX.active, true);
+    resource.add(EX.active, false);
+    
+    const scores = [...resource.getAll(EX.score)];
+    const activeStates = [...resource.getAll(EX.active)];
+    
+    expect(scores).toEqual([95, 87.5]);
+    expect(activeStates).toEqual([true, false]);
+  });
 });
