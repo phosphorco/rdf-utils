@@ -52,6 +52,16 @@ export function testSparqlInterface<G extends Graph<any>>(
       const bindings = [...await populatedGraph.select(query)];
       expect(bindings.length).toBe(3);
       
+      // Assert that bindings.get() returns proper RDF.Term objects, not raw SPARQL results
+      bindings.forEach(binding => {
+        const nameTerm = binding.get('name');
+        expect(nameTerm).toBeDefined();
+        expect(nameTerm!.termType).toBe('Literal');
+        expect(typeof nameTerm!.value).toBe('string');
+        // Ensure it's not a raw SPARQL result object like {type: "literal", value: "..."}
+        expect(nameTerm).not.toHaveProperty('type');
+      });
+      
       const names = bindings.map(b => b.get('name')?.value).sort();
       expect(names).toEqual(['Alice Smith', 'Bob Jones', 'Charlie Brown']);
     });
@@ -72,6 +82,15 @@ export function testSparqlInterface<G extends Graph<any>>(
       
       const bindings = [...await populatedGraph.select(query)];
       expect(bindings.length).toBe(1);
+      
+      // Assert proper RDF.Term is returned from bindings.get()
+      const nameTerm = bindings[0].get('name');
+      expect(nameTerm).toBeDefined();
+      expect(nameTerm!.termType).toBe('Literal');
+      expect(typeof nameTerm!.value).toBe('string');
+      // Ensure it's not a raw SPARQL result object like {type: "literal", value: "..."}
+      expect(nameTerm).not.toHaveProperty('type');
+      
       expect(bindings[0].get('name')?.value).toBe('Alice Smith');
     });
 
@@ -90,6 +109,31 @@ export function testSparqlInterface<G extends Graph<any>>(
       
       const bindings = [...await populatedGraph.select(query)];
       expect(bindings.length).toBe(2);
+      
+      // Assert that bindings.get() returns proper RDF.Term objects per Bindings interface
+      bindings.forEach(binding => {
+        const personTerm = binding.get('person');
+        const nameTerm = binding.get('name');
+        const ageTerm = binding.get('age');
+        
+        // Person URIs should be NamedNode terms, not raw SPARQL objects like {type: "uri", value: "..."}
+        expect(personTerm).toBeDefined();
+        expect(personTerm!.termType).toBe('NamedNode');
+        expect(typeof personTerm!.value).toBe('string');
+        expect(personTerm).not.toHaveProperty('type');
+        
+        // Name literals should be Literal terms, not raw SPARQL objects like {type: "literal", value: "..."}
+        expect(nameTerm).toBeDefined();
+        expect(nameTerm!.termType).toBe('Literal');
+        expect(typeof nameTerm!.value).toBe('string');
+        expect(nameTerm).not.toHaveProperty('type');
+        
+        // Age literals should be typed Literal terms
+        expect(ageTerm).toBeDefined();
+        expect(ageTerm!.termType).toBe('Literal');
+        expect(typeof ageTerm!.value).toBe('string');
+        expect(ageTerm).not.toHaveProperty('type');
+      });
       
       // Check that we have both person and their data
       const results = bindings.map(b => ({

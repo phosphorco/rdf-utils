@@ -75,7 +75,9 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
           const bindings = result.body.results.bindings.map((binding: any) => {
             const bindingMap = new Map();
             Object.keys(binding).forEach(key => {
-              bindingMap.set(key, binding[key]);
+              const rawValue = binding[key];
+              const rdfTerm = this.convertSparqlBindingToRdfTerm(rawValue);
+              bindingMap.set(key, rdfTerm);
             });
             return bindingMap;
           });
@@ -409,5 +411,36 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
         contentType: 'application/n-quads' 
       });
     });
+  }
+
+  /**
+   * Convert raw SPARQL binding value to proper RDF/JS Term
+   */
+  private convertSparqlBindingToRdfTerm(rawValue: any): Term {
+    if (!rawValue || typeof rawValue !== 'object') {
+      throw new Error(`Invalid SPARQL binding value: ${rawValue}`);
+    }
+
+    switch (rawValue.type) {
+      case 'uri':
+        return factory.namedNode(rawValue.value);
+      
+      case 'literal':
+        if (rawValue.datatype) {
+          return factory.literal(rawValue.value, factory.namedNode(rawValue.datatype));
+        } else if (rawValue['xml:lang']) {
+          return factory.literal(rawValue.value, rawValue['xml:lang']);
+        } else {
+          return factory.literal(rawValue.value);
+        }
+      
+      case 'bnode':
+        return factory.blankNode(rawValue.value);
+      
+      default:
+        console.warn(`Unknown SPARQL binding type: ${rawValue.type}`, rawValue);
+        // Fallback: try to create a literal
+        return factory.literal(String(rawValue.value || rawValue));
+    }
   }
 }
