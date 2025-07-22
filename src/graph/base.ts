@@ -4,6 +4,7 @@ import {
   Parser,
   AskQuery,
   ConstructQuery,
+  DescribeQuery, Update,
   SelectQuery, SparqlQuery
 } from 'sparqljs';
 import {
@@ -33,7 +34,13 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   abstract find(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): PromiseOrValue<Iterable<Quad>, IsSync>;
 
   protected prepareQuery(query: Query | string, expectedType: string): Query {
-    const parsedQuery = typeof query === 'string' ? new Parser().parse(query) : query;
+    let parsedQuery: SelectQuery | AskQuery | ConstructQuery | DescribeQuery | Update;
+    try {
+      parsedQuery = typeof query === 'string' ? new Parser({prefixes: globalPrefixMap}).parse(query) : query;
+    } catch (err) {
+      console.error("Error parsing query:", query);
+      throw err;
+    }
     if(parsedQuery.type !== 'query') {
       throw new Error(`Unsupported query type ${parsedQuery.type}`);
     }
