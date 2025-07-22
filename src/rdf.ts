@@ -38,7 +38,7 @@ class ImmutableTerm<TermType extends string, ValueType extends string> implement
   toString(): string {
     switch (this.termType) {
       case "NamedNode":
-        return `<${this.value}>`;
+        return `${this.value}`;
       case "Variable":
         return `?${this.value}`;
       default:

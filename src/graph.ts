@@ -41,7 +41,7 @@ export interface TransactionalGraph<IsSync> extends MutableGraph<IsSync> {
 export type WritableGraph<T> = MutableGraph<T> | ImmutableGraph<T>;
 
 let skolemCounter = 0;
-export async function skolemize(graph: WritableGraph<any>, prefix: string): Promise<WritableGraph<any>> {
+export async function skolemize<T extends WritableGraph<any>>(graph: T, prefix: string): Promise<T> {
 
   const nodes: Record<string, NamedNode> = {};
 

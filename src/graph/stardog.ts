@@ -324,6 +324,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       );
 
     if (!result.ok) {
+      console.log(result.body);
       throw new Error(`Query failed: ${result.statusText}`);
     }
 
