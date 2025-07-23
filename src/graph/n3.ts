@@ -71,17 +71,17 @@ export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
 
 
 
-  static async fromString(data: string, format?: string, baseIRI?: string): Promise<N3Graph> {
+  static fromString(data: string, format?: string, baseIRI?: string): N3Graph {
     const graph = new N3Graph();
-    const quads = await parseQuadsFromString(data, format, baseIRI);
-    await graph.add(quads);
+    const quads = parseQuadsFromString(data, format, baseIRI);
+    graph.add(quads);
     return graph;
   }
 
-  static async fromFile(path: string, format?: string): Promise<N3Graph> {
+  static fromFile(path: string, format?: string): N3Graph {
     const graph = new N3Graph();
-    const quads = await parseQuadsFromFile(path, format);
-    await graph.add(quads);
+    const quads = parseQuadsFromFile(path, format);
+    graph.add(quads);
     return graph;
   }
 }

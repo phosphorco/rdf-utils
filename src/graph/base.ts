@@ -164,26 +164,12 @@ export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, optio
   writeFileSync(path, content, 'utf8');
 }
 
-export async function parseQuadsFromString(data: string, format?: string, baseIRI?: string): Promise<rdfjs.Quad[]> {
+export function parseQuadsFromString(data: string, format?: string, baseIRI?: string): rdfjs.Quad[] {
   const parser = new n3.Parser({ format, baseIRI, factory });
-  
-  return new Promise((resolve, reject) => {
-    const quads: rdfjs.Quad[] = [];
-    
-    parser.parse(data, (error, quad, prefixes) => {
-      if (error) {
-        reject(error);
-      } else if (quad) {
-        quads.push(quad);
-      } else {
-        // Parsing complete
-        resolve(quads);
-      }
-    });
-  });
+  return parser.parse(data);
 }
 
-export async function parseQuadsFromFile(path: string, format?: string): Promise<rdfjs.Quad[]> {
+export function parseQuadsFromFile(path: string, format?: string): rdfjs.Quad[] {
   const content = readFileSync(path, 'utf8');
   return parseQuadsFromString(content, format);
 }
