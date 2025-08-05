@@ -285,10 +285,6 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     return responseText.trim();
   }
 
-
-
-
-
   /**
    * Delete all quads from this graph
    */
@@ -306,6 +302,7 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
   private async executeQuery(queryString: string, contentType: string, reasoning?: boolean): Promise<any> {
 
     const isReasoning = reasoning !== undefined ? reasoning : this.reasoning;
+    //console.log(`Executing query: ${isReasoning}\n ${queryString}`);
     const result = this.transactionId ?
       await stardog.query.executeInTransaction(
         this.connection, 

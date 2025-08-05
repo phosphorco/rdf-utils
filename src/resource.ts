@@ -2,7 +2,7 @@ import { ChangeSetGraph } from './graph/changeset';
 import { factory } from './rdf';
 import { NamedNode, Quad_Subject, Term } from '@rdfjs/types';
 
-class Resource<T extends Quad_Subject> {
+export class Resource<T extends Quad_Subject> {
   public changeset: ChangeSetGraph;
   public subject: T;
 
