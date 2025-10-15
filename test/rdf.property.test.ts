@@ -142,7 +142,7 @@ test("NamedNode Properties", () => {
     const node = factory.namedNode(iri);
     expect(node.termType).toBe("NamedNode");
     expect(node.value).toBe(iri);
-    expect(node.toString()).toBe(`<${iri}>`);
+    expect(node.toString()).toBe(iri);
   }));
 });
 
