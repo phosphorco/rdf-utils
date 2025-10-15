@@ -1,7 +1,6 @@
 import * as RDFJS from '@rdfjs/types';
 import { ValueObject, hash, is, Seq, Collection } from 'immutable'
 import { Readable } from 'stream';
-import {string} from "fast-check";
 
 export type Term = RDFJS.Term & ValueObject;
 export type NamedNode<Iri extends string = string> = RDFJS.NamedNode<Iri> & ValueObject;

@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "prepare": "bun run build",
     "build": "bun run clean && bun tsc && bun build src/index.ts --outdir=dist --target=node",
     "test": "bun test test/",
     "test:watch": "bun test test/ --watch",
