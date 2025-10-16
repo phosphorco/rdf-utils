@@ -377,8 +377,15 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
    */
   private applyGraphContext(quads: Quad[]): Quad[] {
     return quads.map(quad => {
-      const graphIri = this.iri.termType === 'DefaultGraph' ? factory.defaultGraph() : this.iri;
-      return factory.quad(quad.subject, quad.predicate, quad.object, graphIri);
+      let g: NamedNode | DefaultGraph;
+      if(quad.graph && quad.graph.termType == 'NamedNode') {
+        g = factory.namedNode(quad.graph.value);
+      } else if (this.iri.termType === 'DefaultGraph') {
+        g = factory.defaultGraph();
+      } else {
+        g = this.iri;
+      }
+      return factory.quad(quad.subject, quad.predicate, quad.object, g);
     });
   }
 

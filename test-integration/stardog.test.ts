@@ -387,15 +387,15 @@ describe('Stardog Integration Tests', () => {
 
     test('should support reasoning in SPARQL queries inside transaction', async () => {
       const graph = await createTestGraph(true);
-      
+
       // Create schema graph for Stardog reasoning
       const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
       const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
-      
+
       try {
         // Clean up and setup schema outside of transaction
         try { await schemaGraph.deleteAll(); } catch {}
-        
+
         // Add schema (class hierarchy) to the schema graph
         const schemaTriples = [
           factory.quad(
@@ -404,12 +404,12 @@ describe('Stardog Integration Tests', () => {
             factory.namedNode('http://xmlns.com/foaf/0.1/Person')
           )
         ];
-        
+
         await schemaGraph.add(schemaTriples);
-        
+
         // Now start transaction for instance data
         await graph.begin();
-        
+
         // Add instance data within transaction
         const instanceTriples = [
           factory.quad(
@@ -418,9 +418,9 @@ describe('Stardog Integration Tests', () => {
             factory.namedNode('http://example.org/Manager')
           )
         ];
-        
+
         await graph.add(instanceTriples);
-        
+
         // Test reasoning within transaction
         const sparql = `
           PREFIX foaf: <http://xmlns.com/foaf/0.1/>
@@ -428,13 +428,13 @@ describe('Stardog Integration Tests', () => {
             <http://example.org/Jane> a foaf:Person .
           }
         `;
-        
+
         const result = await graph.ask(sparql);
 
         expect(result).toBe(true);
 
         await graph.commit();
-        
+
         // Test reasoning still works after commit
         const resultAfterCommit = await graph.ask(sparql);
         console.log(`Reasoning ${reasoning ? 'enabled' : 'disabled'}: Query result after commit = ${resultAfterCommit}`);
@@ -447,6 +447,89 @@ describe('Stardog Integration Tests', () => {
       } finally {
         await graph.deleteAll();
         try { await schemaGraph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should preserve explicit named graphs in quads when adding', async () => {
+      // Bug test: quads with explicit named graphs should keep their graph IRIs,
+      // not get overwritten with the graph's IRI
+
+      const graph1Iri = factory.namedNode('http://test.example.org/graph1');
+      const graph2Iri = factory.namedNode('http://test.example.org/graph2');
+      const namedGraphA = factory.namedNode('http://example.org/namedGraphA');
+      const namedGraphB = factory.namedNode('http://example.org/namedGraphB');
+
+      const graph = new StardogGraph(config, graph1Iri, false);
+
+      try {
+        // Clean up
+        try { await graph.deleteAll(); } catch {}
+
+        // Create quads with explicit named graphs
+        const quadA = factory.quad(
+          factory.namedNode('http://example.org/itemA'),
+          factory.namedNode('http://example.org/property'),
+          factory.literal('value A'),
+          namedGraphA
+        );
+
+        const quadB = factory.quad(
+          factory.namedNode('http://example.org/itemB'),
+          factory.namedNode('http://example.org/property'),
+          factory.literal('value B'),
+          namedGraphB
+        );
+
+        // Add quads with their explicit named graphs
+        await graph.add([quadA, quadB]);
+
+        // Query for quads in namedGraphA - should find quadA with its explicit graph
+        const sparql = `
+          SELECT ?s ?p ?o WHERE {
+            GRAPH <${namedGraphA}> {
+              ?s ?p ?o
+            }
+          }
+        `;
+
+        const result = await graph.sparql({
+          queryType: 'SELECT',
+          type: 'query',
+          prefixes: {},
+          variables: [
+            factory.variable('s') as any,
+            factory.variable('p') as any,
+            factory.variable('o') as any
+          ],
+          where: [{
+            type: 'graph',
+            name: namedGraphA as any,
+            patterns: [{
+              type: 'bgp',
+              triples: [{
+                subject: factory.variable('s') as any,
+                predicate: factory.variable('p') as any,
+                object: factory.variable('o') as any
+              }]
+            }]
+          }]
+        });
+
+        const bindings: any[] = [];
+        const stream = await result.execute();
+
+        await new Promise<void>((resolve) => {
+          stream.on('data', (binding: any) => bindings.push(binding));
+          stream.on('end', () => resolve());
+        });
+
+        // Should find the quad that was explicitly added to namedGraphA
+        expect(bindings.length).toBe(1);
+        expect(bindings[0].get('o').value).toBe('value A');
+
+      } finally {
+        // Clean up
+        try { await graph.deleteAll(); } catch {}
       }
     });
   });
