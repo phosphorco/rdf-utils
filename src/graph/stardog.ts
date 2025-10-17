@@ -72,15 +72,17 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       return {
         resultType: 'bindings',
         execute: async () => {
-          const bindings = result.body.results.bindings.map((binding: any) => {
-            const bindingMap = new Map();
-            Object.keys(binding).forEach(key => {
-              const rawValue = binding[key];
-              const rdfTerm = this.convertSparqlBindingToRdfTerm(rawValue);
-              bindingMap.set(key, rdfTerm);
+          const bindings = result.body.results.bindings
+            .filter((binding: any) => Object.keys(binding).length > 0)
+            .map((binding: any) => {
+              const bindingMap = new Map();
+              Object.keys(binding).forEach(key => {
+                const rawValue = binding[key];
+                const rdfTerm = this.convertSparqlBindingToRdfTerm(rawValue);
+                bindingMap.set(key, rdfTerm);
+              });
+              return bindingMap;
             });
-            return bindingMap;
-          });
           
           return this.createMockStream(bindings, (binding: any) => binding);
         }
