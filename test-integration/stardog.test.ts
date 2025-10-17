@@ -32,11 +32,11 @@ const testGraphIri = factory.namedNode('http://test.example.org/integration/grap
 // Helper to create a clean test graph
 async function createTestGraph(enableReasoning: boolean = false): Promise<StardogGraph> {
   const graph = new StardogGraph(config, testGraphIri, enableReasoning);
-  
+
   // ALWAYS clean up before test starts - don't trust previous test cleanup
   try {
     await graph.deleteAll();
-    
+
     // Verify cleanup worked - FAIL if it didn't
     const remainingQuads = [...await graph.quads()];
     if (remainingQuads.length > 0) {
@@ -51,8 +51,24 @@ async function createTestGraph(enableReasoning: boolean = false): Promise<Stardo
     }
     // Graph might not exist yet, that's ok for first run
   }
-  
+
   return graph;
+}
+
+// Helper to clear entire database (all graphs) between pragma tests
+async function clearDatabase(): Promise<void> {
+  // Clear the schema graph
+  const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+  const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+  try {
+    await schemaGraph.deleteAll();
+  } catch {}
+
+  // Clear the test graph
+  const testGraph = new StardogGraph(config, testGraphIri, true);
+  try {
+    await testGraph.deleteAll();
+  } catch {}
 }
 
 // Helper to set up graph with test data (for specific quad tests)
@@ -334,15 +350,15 @@ describe('Stardog Integration Tests', () => {
     });
 
     test('should support reasoning in SPARQL queries outside transaction', async () => {
-      const graph = await createTestGraph(true);
-      
+      await clearDatabase();
+
+      const graph = new StardogGraph(config, testGraphIri, true);
+
       // Create schema graph for Stardog reasoning
       const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
       const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
-      
+
       try {
-        // Clean up schema graph
-        try { await schemaGraph.deleteAll(); } catch {}
         
         // Add schema (class hierarchy) to the schema graph
         const schemaTriples = [
@@ -380,13 +396,14 @@ describe('Stardog Integration Tests', () => {
         expect(result).toBe(true);
 
       } finally {
-        await graph.deleteAll();
-        try { await schemaGraph.deleteAll(); } catch {}
+        await clearDatabase();
       }
     });
 
     test('should support reasoning in SPARQL queries inside transaction', async () => {
-      const graph = await createTestGraph(true);
+      await clearDatabase();
+
+      const graph = new StardogGraph(config, testGraphIri, true);
 
       // Create schema graph for Stardog reasoning
       const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
@@ -445,8 +462,7 @@ describe('Stardog Integration Tests', () => {
         try { await graph.rollback(); } catch {}
         throw error;
       } finally {
-        await graph.deleteAll();
-        try { await schemaGraph.deleteAll(); } catch {}
+        await clearDatabase();
       }
     });
 
@@ -531,6 +547,325 @@ describe('Stardog Integration Tests', () => {
         // Clean up
         try { await graph.deleteAll(); } catch {}
       }
+    });
+
+    describe('Per-Query Reasoning Override (Pragma Directives)', () => {
+      /**
+       * Test reasoning override: disable reasoning within a reasoning transaction
+       * Uses pragma directive to override transaction-level reasoning setting
+       */
+      test('should override reasoning OFF in reasoning transaction via pragma', async () => {
+        await clearDatabase();
+
+        const graph = new StardogGraph(config, testGraphIri, true); // reasoning=true for graph
+
+        // Create schema graph for reasoning rules
+        const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+        const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+
+        try {
+
+          // Add schema: Employee subClassOf Person
+          const schemaTriples = [
+            factory.quad(
+              factory.namedNode('http://example.org/Employee'),
+              factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+              factory.namedNode('http://xmlns.com/foaf/0.1/Person')
+            )
+          ];
+
+          await schemaGraph.add(schemaTriples);
+
+          // Start reasoning transaction
+          await graph.begin();
+
+          // Add instance data: John is an Employee
+          const instanceTriples = [
+            factory.quad(
+              factory.namedNode('http://example.org/John'),
+              factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+              factory.namedNode('http://example.org/Employee')
+            )
+          ];
+
+          await graph.add(instanceTriples);
+
+          // Query to check if John is a Person (would be inferred with reasoning)
+          const askQuery = `
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            ASK WHERE {
+              <http://example.org/John> a foaf:Person .
+            }
+          `;
+
+          // Query WITH reasoning enabled (default) - should be true
+          const resultWithReasoning = await graph.ask(askQuery);
+          expect(resultWithReasoning).toBe(true);
+
+          // Query WITH reasoning DISABLED via pragma - should be false
+          const resultWithoutReasoning = await graph.ask(askQuery, { reasoning: false });
+          expect(resultWithoutReasoning).toBe(false);
+
+          await graph.commit();
+
+        } catch (error) {
+          try { await graph.rollback(); } catch {}
+          throw error;
+        } finally {
+          await clearDatabase();
+        }
+      });
+
+      /**
+       * Test reasoning override: verify pragmas don't enable reasoning in non-reasoning transactions
+       * This documents a Stardog limitation: pragmas can disable reasoning in reasoning transactions,
+       * but cannot enable reasoning in non-reasoning transactions (transaction-level setting is immutable that way)
+       */
+      test('should NOT override reasoning ON in non-reasoning transaction (Stardog limitation)', async () => {
+        await clearDatabase();
+
+        const graph = new StardogGraph(config, testGraphIri, false); // reasoning=false for graph
+
+        // Create schema graph for reasoning rules
+        const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+        const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+
+        try {
+
+          // Add schema: Manager subClassOf Person
+          const schemaTriples = [
+            factory.quad(
+              factory.namedNode('http://example.org/Manager'),
+              factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+              factory.namedNode('http://xmlns.com/foaf/0.1/Person')
+            )
+          ];
+
+          await schemaGraph.add(schemaTriples);
+
+          // Start non-reasoning transaction
+          await graph.begin();
+
+          // Add instance data: Jane is a Manager
+          const instanceTriples = [
+            factory.quad(
+              factory.namedNode('http://example.org/Jane'),
+              factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+              factory.namedNode('http://example.org/Manager')
+            )
+          ];
+
+          await graph.add(instanceTriples);
+
+          // Query to check if Jane is a Person (would be inferred with reasoning)
+          const askQuery = `
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            ASK WHERE {
+              <http://example.org/Jane> a foaf:Person .
+            }
+          `;
+
+          // Query with default (no reasoning) - should be false
+          const resultWithoutReasoning = await graph.ask(askQuery);
+          expect(resultWithoutReasoning).toBe(false);
+
+          // Query WITH reasoning pragma override - Stardog limitation: pragma cannot enable
+          // reasoning within a non-reasoning transaction. Result should still be false.
+          const resultWithReasoningAttempt = await graph.ask(askQuery, { reasoning: true });
+          expect(resultWithReasoningAttempt).toBe(false);
+
+          await graph.commit();
+
+        } catch (error) {
+          try { await graph.rollback(); } catch {}
+          throw error;
+        } finally {
+          await clearDatabase();
+        }
+      });
+
+      /**
+       * Test SELECT queries with reasoning override (disable in reasoning transaction)
+       */
+      test('should override reasoning OFF for SELECT queries in reasoning transaction', async () => {
+        await clearDatabase();
+
+        const graph = new StardogGraph(config, testGraphIri, true); // reasoning=true
+
+        const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+        const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+
+        try {
+
+          // Add schema: Developer subClassOf Employee
+          await schemaGraph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Developer'),
+              factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+              factory.namedNode('http://example.org/Employee')
+            )
+          ]);
+
+          await graph.begin();
+
+          // Add instance: Alice is a Developer
+          await graph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Alice'),
+              factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+              factory.namedNode('http://example.org/Developer')
+            )
+          ]);
+
+          const selectQuery = `
+            PREFIX ex: <http://example.org/>
+            SELECT ?person WHERE {
+              ?person a ex:Employee .
+            }
+          `;
+
+          // With reasoning (default): should find Alice (inferred as Employee)
+          const withReasoning = await graph.select(selectQuery);
+          expect([...withReasoning].length).toBe(1);
+
+          // Without reasoning via pragma: should find nothing (Alice not directly typed as Employee)
+          const withoutReasoning = await graph.select(selectQuery, { reasoning: false });
+          expect([...withoutReasoning].length).toBe(0);
+
+          await graph.commit();
+
+        } catch (error) {
+          try { await graph.rollback(); } catch {}
+          throw error;
+        } finally {
+          await clearDatabase();
+        }
+      });
+
+      /**
+       * Test CONSTRUCT queries with reasoning override (disable in reasoning transaction)
+       */
+      test('should override reasoning OFF for CONSTRUCT queries in reasoning transaction', async () => {
+        await clearDatabase();
+
+        const graph = new StardogGraph(config, testGraphIri, true); // reasoning=true
+
+        const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+        const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+
+        try {
+
+          // Add schema: Consultant subClassOf Contractor
+          await schemaGraph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Consultant'),
+              factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+              factory.namedNode('http://example.org/Contractor')
+            )
+          ]);
+
+          await graph.begin();
+
+          // Add instance: Bob is a Consultant
+          await graph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Bob'),
+              factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+              factory.namedNode('http://example.org/Consultant')
+            )
+          ]);
+
+          const constructQuery = `
+            PREFIX ex: <http://example.org/>
+            CONSTRUCT { ?person a ex:Contractor }
+            WHERE { ?person a ex:Contractor }
+          `;
+
+          // With reasoning (default): should construct triple for Bob
+          const resultWithReasoning = await graph.construct(constructQuery);
+          const quadsWithReasoning = [...await resultWithReasoning.quads()];
+          expect(quadsWithReasoning.length).toBe(1);
+
+          // Without reasoning via pragma: should construct nothing
+          const resultWithoutReasoning = await graph.construct(constructQuery, { reasoning: false });
+          const quadsWithoutReasoning = [...await resultWithoutReasoning.quads()];
+          expect(quadsWithoutReasoning.length).toBe(0);
+
+          await graph.commit();
+
+        } catch (error) {
+          try { await graph.rollback(); } catch {}
+          throw error;
+        } finally {
+          await clearDatabase();
+        }
+      });
+
+      /**
+       * Test multiple queries with different reasoning settings in same transaction
+       */
+      test('should handle multiple queries with alternating reasoning disables in same transaction', async () => {
+        await clearDatabase();
+
+        const graph = new StardogGraph(config, testGraphIri, true); // reasoning=true
+
+        const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+        const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+
+        try {
+
+          // Add schema: Student subClassOf Person
+          await schemaGraph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Student'),
+              factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+              factory.namedNode('http://xmlns.com/foaf/0.1/Person')
+            )
+          ]);
+
+          await graph.begin();
+
+          // Add instance: Charlie is a Student
+          await graph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Charlie'),
+              factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+              factory.namedNode('http://example.org/Student')
+            )
+          ]);
+
+          const query = `
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            ASK WHERE {
+              <http://example.org/Charlie> a foaf:Person .
+            }
+          `;
+
+          // First query with default reasoning enabled
+          const result1 = await graph.ask(query);
+          expect(result1).toBe(true);
+
+          // Second query with reasoning disabled via pragma
+          const result2 = await graph.ask(query, { reasoning: false });
+          expect(result2).toBe(false);
+
+          // Third query with reasoning disabled again
+          const result3 = await graph.ask(query, { reasoning: false });
+          expect(result3).toBe(false);
+
+          // Fourth query back to default (reasoning enabled)
+          const result4 = await graph.ask(query);
+          expect(result4).toBe(true);
+
+          await graph.commit();
+
+        } catch (error) {
+          try { await graph.rollback(); } catch {}
+          throw error;
+        } finally {
+          await clearDatabase();
+        }
+      });
     });
   });
 });

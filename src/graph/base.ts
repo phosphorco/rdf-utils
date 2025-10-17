@@ -18,7 +18,7 @@ import {
 } from '../rdf';
 import {BaseQuery, Bindings, ResultStream} from "@rdfjs/types";
 import * as rdfjs from "@rdfjs/types"
-import { Graph, PromiseOrValue } from '../graph';
+import { Graph, PromiseOrValue, QueryOptions } from '../graph';
 import * as n3 from 'n3';
 import { writeFileSync, readFileSync } from 'fs';
 
@@ -29,7 +29,7 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
     this.iri = iri || factory.defaultGraph();
   }
 
-  abstract sparql(query: SparqlQuery): Promise<BaseQuery>;
+  abstract sparql(query: SparqlQuery, options?: QueryOptions): Promise<BaseQuery>;
   abstract quads(): PromiseOrValue<Iterable<Quad>, IsSync>;
   abstract find(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): PromiseOrValue<Iterable<Quad>, IsSync>;
 
@@ -60,16 +60,16 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
     return parsedQuery;
   }
 
-  async ask(query: AskQuery | string): Promise<boolean> {
+  async ask(query: AskQuery | string, options?: QueryOptions): Promise<boolean> {
     const q = this.prepareQuery(query, "ASK");
-    const sparqlQ = await this.sparql(q);
+    const sparqlQ = await this.sparql(q, options);
     if(sparqlQ.resultType !== 'boolean') { throw new Error("Invalid result type.")}
     return await sparqlQ.execute(query) as boolean;
   }
 
-  async construct(query: ConstructQuery | string): Promise<Graph<true>> {
+  async construct(query: ConstructQuery | string, options?: QueryOptions): Promise<Graph<true>> {
     const q = this.prepareQuery(query, "CONSTRUCT");
-    const sparqlQ = await this.sparql(q);
+    const sparqlQ = await this.sparql(q, options);
     if(sparqlQ.resultType !== 'quads') { throw new Error("Invalid result type.")}
     const stream = await sparqlQ.execute(query) as ResultStream<rdfjs.Quad>;
     return new Promise(async (resolve, reject) => {
@@ -86,9 +86,9 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
     })
   }
 
-  async select(query: SelectQuery | string): Promise<Iterable<Bindings>> {
+  async select(query: SelectQuery | string, options?: QueryOptions): Promise<Iterable<Bindings>> {
     const q = this.prepareQuery(query, "SELECT");
-    const sparqlQ = await this.sparql(q);
+    const sparqlQ = await this.sparql(q, options);
     if(sparqlQ.resultType !== 'bindings') { throw new Error("Invalid result type.")}
     const stream = await sparqlQ.execute(query) as ResultStream<Bindings>;
 

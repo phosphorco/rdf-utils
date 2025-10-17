@@ -1,4 +1,4 @@
-import {Graph, ImmutableGraph, MutableGraph} from '../graph';
+import {Graph, ImmutableGraph, MutableGraph, QueryOptions} from '../graph';
 import { NamedNode, BlankNode, DefaultGraph, Quad, Quad_Subject, factory  } from '../rdf';
 import { BaseGraph } from './base';
 import { SparqlQuery } from 'sparqljs';
@@ -49,8 +49,8 @@ export class ChangeSetGraph extends BaseGraph<true> {
     return this.current.find(subject, predicate, object, graph);
   }
 
-  async sparql(query: SparqlQuery) {
-    return await this.current.sparql(query);
+  async sparql(query: SparqlQuery, options?: QueryOptions) {
+    return await this.current.sparql(query, options);
   }
 
   add(quads: Iterable<rdfjs.Quad>): this {

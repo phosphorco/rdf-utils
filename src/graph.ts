@@ -7,14 +7,24 @@ import {ChangeSetGraph} from "./graph/changeset";
 
 export type PromiseOrValue<T, IsSync> = IsSync extends true ? T : Promise<T>;
 
+/**
+ * Options for SPARQL query execution
+ */
+export interface QueryOptions {
+  /**
+   * Enable or disable reasoning for this query (overrides graph-level setting)
+   */
+  reasoning?: boolean;
+}
+
 export interface Graph<IsSync> {
   iri: NamedNode | DefaultGraph;
 
   quads(): PromiseOrValue<Iterable<Quad>, IsSync>;
   find(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): PromiseOrValue<Iterable<Quad>, IsSync>;
-  select(query: SelectQuery | string): Promise<Iterable<Bindings>>;
-  ask(query: AskQuery | string): Promise<boolean>;
-  construct(query: ConstructQuery | string): Promise<Graph<true>>;
+  select(query: SelectQuery | string, options?: QueryOptions): Promise<Iterable<Bindings>>;
+  ask(query: AskQuery | string, options?: QueryOptions): Promise<boolean>;
+  construct(query: ConstructQuery | string, options?: QueryOptions): Promise<Graph<true>>;
   
   // Serialization methods
   toString(options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<string, IsSync>;

@@ -4,7 +4,7 @@ import { translate } from 'sparqlalgebrajs';
 import {  SparqlQuery } from 'sparqljs';
 import type { Source, Stream, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types';
-import { ImmutableGraph } from '../graph';
+import { ImmutableGraph, QueryOptions } from '../graph';
 import { NamedNode, DefaultGraph, Quad, factory } from '../rdf';
 import { BaseGraph } from './base';
 import { Readable } from 'stream';
@@ -42,7 +42,7 @@ export class ImmutableSetGraph extends BaseGraph<true> implements ImmutableGraph
     return Readable.from(this.find(subject, predicate, object, graph));
   }
 
-  async sparql(query: SparqlQuery) {
+  async sparql(query: SparqlQuery, options?: QueryOptions) {
     return await this.queryEngine.query(translate(query), { sources: [this] });
   }
 

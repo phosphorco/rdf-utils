@@ -1,7 +1,7 @@
 import {BaseQuad, Bindings, BaseQuery, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types'
 import { NamedNode, DefaultGraph, factory, Quad } from '../rdf';
-import { MutableGraph, TransactionalGraph } from '../graph';
+import { MutableGraph, TransactionalGraph, QueryOptions } from '../graph';
 import { BaseGraph, serializeQuads, saveQuadsToFile } from './base';
 import { Query, Generator, SparqlQuery, SelectQuery, ConstructQuery } from 'sparqljs';
 import * as stardog from 'stardog';
@@ -53,18 +53,25 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     }
   }
 
-  async sparql(query: SparqlQuery): Promise<BaseQuery> {
+  async sparql(query: SparqlQuery, options?: QueryOptions): Promise<BaseQuery> {
     const generator = new Generator();
-    const queryString = generator.stringify(query);
+    let queryString = generator.stringify(query);
 
     // Check if this is an Update query (not supported)
     if ('updateType' in query) {
       throw new Error('Update queries are not supported. Use add/delete methods instead.');
     }
 
+    // Apply reasoning pragma if explicitly specified in options
+    // This overrides the graph-level reasoning setting and works in transactions
+    if (options?.reasoning !== undefined) {
+      const pragma = options.reasoning ? '#pragma reasoning on' : '#pragma reasoning off';
+      queryString = pragma + '\n' + queryString;
+    }
+
     const queryType = (query as Query).queryType;
     const contentType = this.getContentType(queryType);
-    
+
     const result = await this.executeQuery(queryString, contentType);
 
     // Return appropriate BaseQuery based on query type
@@ -109,11 +116,11 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
 
   async quads(): Promise<Iterable<Quad>> {
     const graphIri = this.iri.termType === 'DefaultGraph' ? '' : this.iri.value;
-    const sparql = graphIri ? 
+    const sparql = graphIri ?
       `SELECT * WHERE { GRAPH <${graphIri}> { ?s ?p ?o } }` :
       `SELECT * WHERE { ?s ?p ?o }`;
-    
-    const result = await this.executeQuery(sparql, 'application/sparql-results+json', false);
+
+    const result = await this.executeQuery(sparql, 'application/sparql-results+json');
     
     const quads: Quad[] = [];
     if (result.body?.results?.bindings) {
@@ -300,26 +307,28 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
 
   /**
    * Unified query execution handling both transaction and non-transaction cases
+   *
+   * Note: If the query contains a pragma directive (#pragma reasoning on/off),
+   * it will override the graph-level reasoning setting.
    */
-  private async executeQuery(queryString: string, contentType: string, reasoning?: boolean): Promise<any> {
+  private async executeQuery(queryString: string, contentType: string): Promise<any> {
 
-    const isReasoning = reasoning !== undefined ? reasoning : this.reasoning;
-    //console.log(`Executing query: ${isReasoning}\n ${queryString}`);
+    //console.log(`Executing query: ${this.reasoning}\n ${queryString}`);
     const result = this.transactionId ?
       await stardog.query.executeInTransaction(
-        this.connection, 
-        this.config.database, 
-        this.transactionId, 
-        queryString, 
+        this.connection,
+        this.config.database,
+        this.transactionId,
+        queryString,
         { accept: contentType as any },
-        {reasoning: isReasoning}
+        {reasoning: this.reasoning}
       ) :
       await stardog.query.execute(
-        this.connection, 
-        this.config.database, 
-        queryString, 
+        this.connection,
+        this.config.database,
+        queryString,
         contentType as any,
-        {reasoning: isReasoning}
+        {reasoning: this.reasoning}
       );
 
     if (!result.ok) {
