@@ -21,6 +21,7 @@ import * as rdfjs from "@rdfjs/types"
 import { Graph, PromiseOrValue, QueryOptions } from '../graph';
 import * as n3 from 'n3';
 import { writeFileSync, readFileSync } from 'fs';
+import { RdfXmlParser } from 'rdfxml-streaming-parser';
 
 export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   iri: NamedNode | DefaultGraph;
@@ -164,12 +165,139 @@ export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, optio
   writeFileSync(path, content, 'utf8');
 }
 
+/**
+ * Detects the RDF format from a MIME type, file extension, or content
+ * @param format - Explicit format string (MIME type or format name)
+ * @param filePath - Optional file path to detect format from extension
+ * @param content - Optional content to analyze for format detection
+ * @returns Normalized format string or undefined
+ */
+function detectFormat(format?: string, filePath?: string, content?: string): string | undefined {
+  // If format is explicitly provided, normalize and return it
+  if (format) {
+    // Normalize common RDF/XML MIME types
+    if (format === 'application/rdf+xml' || format === 'text/rdf+xml' || format === 'rdf/xml' || format === 'rdfxml') {
+      return 'application/rdf+xml';
+    }
+    // Normalize trig format
+    if (format === 'application/trig' || format === 'trig') {
+      return 'application/trig';
+    }
+    // Return other formats as-is for n3 parser
+    return format;
+  }
+
+  // Detect from file extension
+  if (filePath) {
+    const extension = filePath.toLowerCase().split('.').pop();
+    if (extension === 'rdf' || extension === 'rdfxml' || extension === 'xml') {
+      return 'application/rdf+xml';
+    }
+    if (extension === 'trig') {
+      return 'application/trig';
+    }
+    if (extension === 'ttl') {
+      return 'text/turtle';
+    }
+    if (extension === 'n3') {
+      return 'text/n3';
+    }
+    if (extension === 'nq') {
+      return 'application/n-quads';
+    }
+  }
+
+  // Detect from content (look for RDF/XML markers)
+  if (content && content.trim().startsWith('<')) {
+    // Check for RDF root element
+    if (content.includes('<rdf:RDF') || content.includes('<RDF')) {
+      return 'application/rdf+xml';
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Parses RDF data from a string. For RDF/XML format, use parseQuadsFromStringAsync instead.
+ * @param data - The RDF data as a string
+ * @param format - The format of the data (MIME type or format name)
+ * @param baseIRI - Optional base IRI for relative IRIs
+ * @returns Array of RDF quads
+ * @throws Error if trying to parse RDF/XML synchronously (use parseQuadsFromStringAsync instead)
+ */
 export function parseQuadsFromString(data: string, format?: string, baseIRI?: string): rdfjs.Quad[] {
-  const parser = new n3.Parser({ format, baseIRI, factory });
+  const detectedFormat = detectFormat(format, undefined, data);
+
+  // RDF/XML requires async parsing
+  if (detectedFormat === 'application/rdf+xml') {
+    throw new Error('RDF/XML format requires async parsing. Use parseQuadsFromStringAsync instead.');
+  }
+
+  // Use n3 parser for other formats
+  const parser = new n3.Parser({ format: detectedFormat, baseIRI, factory });
   return parser.parse(data);
+}
+
+/**
+ * Parses RDF data from a string asynchronously. Supports RDF/XML, Turtle, N3, N-Quads, and TriG formats.
+ * @param data - The RDF data as a string
+ * @param format - The format of the data (MIME type or format name)
+ * @param baseIRI - Optional base IRI for relative IRIs
+ * @returns Promise that resolves to an array of RDF quads
+ */
+export async function parseQuadsFromStringAsync(data: string, format?: string, baseIRI?: string): Promise<rdfjs.Quad[]> {
+  const detectedFormat = detectFormat(format, undefined, data);
+
+  // Use RDF/XML parser for RDF/XML format
+  if (detectedFormat === 'application/rdf+xml') {
+    const quads: rdfjs.Quad[] = [];
+
+    return new Promise((resolve, reject) => {
+      const parser = new RdfXmlParser({ baseIRI, dataFactory: factory });
+
+      parser.on('data', (quad: rdfjs.Quad) => {
+        quads.push(quad);
+      });
+
+      parser.on('end', () => {
+        resolve(quads);
+      });
+
+      parser.on('error', (error: Error) => {
+        reject(error);
+      });
+
+      parser.write(data);
+      parser.end();
+    });
+  }
+
+  // Use n3 parser for other formats (synchronously)
+  const parser = new n3.Parser({ format: detectedFormat, baseIRI, factory });
+  return Promise.resolve(parser.parse(data));
 }
 
 export function parseQuadsFromFile(path: string, format?: string): rdfjs.Quad[] {
   const content = readFileSync(path, 'utf8');
-  return parseQuadsFromString(content, format);
+  const detectedFormat = detectFormat(format, path, content);
+
+  // RDF/XML requires async parsing
+  if (detectedFormat === 'application/rdf+xml') {
+    throw new Error('RDF/XML format requires async parsing. Use parseQuadsFromFileAsync instead.');
+  }
+
+  return parseQuadsFromString(content, detectedFormat);
+}
+
+/**
+ * Parses RDF data from a file asynchronously. Automatically detects format from file extension or content.
+ * @param path - Path to the RDF file
+ * @param format - Optional explicit format (MIME type or format name)
+ * @returns Promise that resolves to an array of RDF quads
+ */
+export async function parseQuadsFromFileAsync(path: string, format?: string): Promise<rdfjs.Quad[]> {
+  const content = readFileSync(path, 'utf8');
+  const detectedFormat = detectFormat(format, path, content);
+  return parseQuadsFromStringAsync(content, detectedFormat);
 }

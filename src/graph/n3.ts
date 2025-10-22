@@ -14,7 +14,7 @@ import type { Bindings, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types';
 import { MutableGraph, Graph, QueryOptions} from '../graph';
 import { NamedNode, DefaultGraph, Quad, factory } from '../rdf';
-import {BaseGraph, parseQuadsFromString, parseQuadsFromFile} from './base';
+import {BaseGraph, parseQuadsFromString, parseQuadsFromFile, parseQuadsFromStringAsync, parseQuadsFromFileAsync} from './base';
 import {BaseQuad} from "n3";
 
 export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
@@ -81,6 +81,33 @@ export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
   static fromFile(path: string, format?: string): N3Graph {
     const graph = new N3Graph();
     const quads = parseQuadsFromFile(path, format);
+    graph.add(quads);
+    return graph;
+  }
+
+  /**
+   * Creates a new N3Graph from RDF data asynchronously. Supports RDF/XML, Turtle, N3, N-Quads, and TriG formats.
+   * @param data - The RDF data as a string
+   * @param format - Optional format (MIME type or format name). If not provided, will be detected from content.
+   * @param baseIRI - Optional base IRI for relative IRIs
+   * @returns Promise that resolves to a new N3Graph instance
+   */
+  static async fromStringAsync(data: string, format?: string, baseIRI?: string): Promise<N3Graph> {
+    const graph = new N3Graph();
+    const quads = await parseQuadsFromStringAsync(data, format, baseIRI);
+    graph.add(quads);
+    return graph;
+  }
+
+  /**
+   * Creates a new N3Graph from an RDF file asynchronously. Automatically detects format from file extension or content.
+   * @param path - Path to the RDF file
+   * @param format - Optional explicit format (MIME type or format name)
+   * @returns Promise that resolves to a new N3Graph instance
+   */
+  static async fromFileAsync(path: string, format?: string): Promise<N3Graph> {
+    const graph = new N3Graph();
+    const quads = await parseQuadsFromFileAsync(path, format);
     graph.add(quads);
     return graph;
   }
