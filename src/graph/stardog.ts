@@ -54,8 +54,13 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
   }
 
   async sparql(query: SparqlQuery, options?: QueryOptions): Promise<BaseQuery> {
-    const generator = new Generator();
+    const generator = new Generator({prefixes: {"stardog": "stardog"}});
     let queryString = generator.stringify(query);
+
+    // Handle Stardog-specific special values that must appear without angle brackets
+    // Stardog context values like 'stardog:context:all' are vendor-specific extensions
+    // that violate standard SPARQL grammar but are accepted by Stardog
+    queryString = queryString.replace(/<(stardog:context:\w+)>/g, '$1');
 
     // Check if this is an Update query (not supported)
     if ('updateType' in query) {
