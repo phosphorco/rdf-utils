@@ -9,11 +9,11 @@ import type { Quad } from '../src/rdf.js';
 import { N3Graph } from '../src/graph/n3.js';
 
 // Load environment variables and construct endpoint
-const protocol = process.env.GRAPHDB_PROTOCOL || 'http';
-const host = process.env.GRAPHDB_HOST || 'wells.local';
-const port = process.env.GRAPHDB_PORT || '7200';
+const protocol = process.env.GRAPHDB_PROTOCOL!;
+const host = process.env.GRAPHDB_HOST!;
+const port = process.env.GRAPHDB_PORT!;
 const endpoint = `${protocol}://${host}:${port}`;
-const repositoryId = process.env.GRAPHDB_REPOSITORY || 'necromancy';
+const repositoryId = process.env.GRAPHDB_REPOSITORY!;
 
 const config: GraphDBConfig = {
   endpoint,
@@ -22,10 +22,10 @@ const config: GraphDBConfig = {
 
 // Additional configuration
 const reasoning = process.env.GRAPHDB_REASONING === 'true';
-const timeout = parseInt(process.env.GRAPHDB_TIMEOUT || '30000');
+const timeout = parseInt(process.env.GRAPHDB_TIMEOUT!);
 
 // Test graph IRI for integration tests
-const testGraphIri = factory.namedNode('http://test.example.org/integration/graph');
+const testGraphIri = factory.namedNode(process.env.TEST_GRAPH_IRI!);
 
 // Helper to create a clean test graph
 async function createTestGraph(enableReasoning: boolean = false): Promise<GraphDBGraph> {
