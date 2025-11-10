@@ -10,6 +10,8 @@
     "test": "bun test test/",
     "test:watch": "bun test test/ --watch",
     "test:integration": "bun test test-integration/",
+    "test:stardog": "bun test test-integration/stardog.test.ts",
+    "test:graphdb": "bun test test-integration/graphdb.test.ts",
     "test:all": "bun test test/ test-integration/",
     "dev": "bun --watch src/index.ts",
     "clean": "rm -rf dist"
