@@ -228,6 +228,14 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
     this.transactionUrl = null;
   }
 
+  withIri(iri: NamedNode | DefaultGraph | undefined): this {
+    const resolvedIri = iri || factory.defaultGraph();
+    const newGraph = new GraphDBGraph(this.config, resolvedIri, this.reasoning);
+    // Inherit the transaction state from the current graph
+    newGraph.transactionUrl = this.transactionUrl;
+    return newGraph as this;
+  }
+
   /**
    * Delete all quads from this graph
    */
@@ -359,10 +367,10 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
 
     try {
       const result = await operation(txUrl);
-      await this.updateTransaction('COMMIT', txUrl);
+      await this.commit();
       return result;
     } catch (err) {
-      await fetch(txUrl, { method: 'DELETE' });
+      await this.rollback();
       throw err;
     }
   }

@@ -68,7 +68,10 @@ export class ImmutableSetGraph extends BaseGraph<true> implements ImmutableGraph
     return new ImmutableSetGraph(this.iri as NamedNode, newQuadsSet) as this;
   }
 
-
+  withIri(iri: NamedNode | DefaultGraph | undefined): this {
+    const resolvedIri = iri || factory.defaultGraph();
+    return new ImmutableSetGraph(resolvedIri as NamedNode | DefaultGraph, this.data) as this;
+  }
 
   equals(other: unknown): boolean {
     if (!(other instanceof ImmutableSetGraph)) return false;

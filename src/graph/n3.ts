@@ -69,7 +69,13 @@ export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
     }
   }
 
-
+  withIri(iri: NamedNode | DefaultGraph | undefined): this {
+    const newGraph = new N3Graph(iri as NamedNode | undefined);
+    // Share the same store and queryEngine
+    newGraph.store = this.store;
+    newGraph.queryEngine = this.queryEngine;
+    return newGraph as this;
+  }
 
   static fromString(data: string, format?: string, baseIRI?: string): N3Graph {
     const graph = new N3Graph();

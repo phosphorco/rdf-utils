@@ -25,7 +25,8 @@ export interface Graph<IsSync> {
   select(query: SelectQuery | string, options?: QueryOptions): Promise<Iterable<Bindings>>;
   ask(query: AskQuery | string, options?: QueryOptions): Promise<boolean>;
   construct(query: ConstructQuery | string, options?: QueryOptions): Promise<Graph<true>>;
-  
+  withIri(iri: NamedNode | DefaultGraph | undefined): this;
+
   // Serialization methods
   toString(options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<string, IsSync>;
   saveToFile(path: string, options?: { format?: string, prefixes?: any, baseIRI?: string }): PromiseOrValue<void, IsSync>;

@@ -300,3 +300,147 @@ testImmutableGraphInterface(
   async () => new ImmutableSetGraph()
 );
 
+/**
+ * Generic test suite for withIri method
+ */
+export function testWithIriMethod<G extends Graph<any>>(
+  name: string,
+  createGraph: () => Promise<G>,
+  setupGraph: (graph: G, quads: Quad[]) => Promise<G>
+) {
+  describe(`${name} - withIri method`, () => {
+    test('should change the IRI of the graph', async () => {
+      const graph = await createGraph();
+      const newIri = EX.myGraph;
+
+      const updatedGraph = graph.withIri(newIri);
+
+      expect(updatedGraph.iri.equals(newIri)).toBe(true);
+      expect(graph.iri).not.toBe(updatedGraph.iri); // Different IRI objects
+    });
+
+    test('should preserve graph content when changing IRI', async () => {
+      const graph = await createGraph();
+      const populatedGraph = await setupGraph(graph, testQuads);
+      const newIri = EX.newGraph;
+
+      const updatedGraph = populatedGraph.withIri(newIri);
+
+      const originalQuads = [...await populatedGraph.quads()];
+      const updatedQuads = [...await updatedGraph.quads()];
+
+      expect(updatedQuads.length).toBe(originalQuads.length);
+    });
+
+    test('should convert undefined to DefaultGraph', async () => {
+      const graph = await createGraph();
+      const updatedGraph = graph.withIri(undefined);
+
+      expect(updatedGraph.iri.termType).toBe('DefaultGraph');
+    });
+
+    test('should return same type as original graph', async () => {
+      const graph = await createGraph();
+      const newIri = EX.anotherGraph;
+
+      const updatedGraph = graph.withIri(newIri);
+
+      expect(updatedGraph).toBeInstanceOf(graph.constructor);
+    });
+
+    test('should support chaining withIri calls', async () => {
+      const graph = await createGraph();
+      const iri1 = EX.graph1;
+      const iri2 = EX.graph2;
+
+      const g1 = graph.withIri(iri1);
+      const g2 = g1.withIri(iri2);
+
+      expect(g1.iri.equals(iri1)).toBe(true);
+      expect(g2.iri.equals(iri2)).toBe(true);
+    });
+
+    test('should not affect original graph when changing IRI', async () => {
+      const graph = await createGraph();
+      const populatedGraph = await setupGraph(graph, testQuads);
+      const originalIri = populatedGraph.iri;
+      const newIri = EX.different;
+
+      const updatedGraph = populatedGraph.withIri(newIri);
+
+      // Original should remain unchanged
+      expect(populatedGraph.iri).toBe(originalIri);
+      expect(populatedGraph.iri.equals(updatedGraph.iri)).toBe(false);
+    });
+  });
+}
+
+/**
+ * Generic test suite for withIri with data sharing (mutable graphs)
+ */
+export function testWithIriDataSharing<G extends Graph<any>>(
+  name: string,
+  createGraph: () => Promise<G>,
+  setupGraph: (graph: G, quads: Quad[]) => Promise<G>,
+  isMutable: boolean
+) {
+  if (!isMutable) return; // Skip for immutable graphs
+
+  describe(`${name} - withIri data sharing`, () => {
+    test('should share data between original and withIri graph (mutable)', async () => {
+      const graph = await createGraph();
+      const populatedGraph = await setupGraph(graph, [testQuads[0]]);
+
+      const graphWithNewIri = populatedGraph.withIri(EX.newGraph);
+
+      // Add to the new graph
+      await graphWithNewIri.add([testQuads[1]]);
+
+      // Both should have the new quad (shared data)
+      const originalQuads = [...await populatedGraph.quads()];
+      const newQuads = [...await graphWithNewIri.quads()];
+
+      expect(originalQuads.length).toBe(2);
+      expect(newQuads.length).toBe(2);
+    });
+  });
+}
+
+// Tests for withIri on N3Graph
+testWithIriMethod(
+  'N3Graph',
+  async () => new N3Graph(),
+  async (graph, quads) => {
+    await graph.add(quads);
+    return graph;
+  }
+);
+
+testWithIriDataSharing(
+  'N3Graph',
+  async () => new N3Graph(),
+  async (graph, quads) => {
+    await graph.add(quads);
+    return graph;
+  },
+  true // N3Graph is mutable
+);
+
+// Tests for withIri on ImmutableSetGraph
+testWithIriMethod(
+  'ImmutableSetGraph',
+  async () => new ImmutableSetGraph(),
+  async (graph, quads) => {
+    return await graph.add(quads);
+  }
+);
+
+testWithIriDataSharing(
+  'ImmutableSetGraph',
+  async () => new ImmutableSetGraph(),
+  async (graph, quads) => {
+    return await graph.add(quads);
+  },
+  false // ImmutableSetGraph is immutable
+);
+

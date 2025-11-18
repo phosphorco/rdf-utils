@@ -33,6 +33,7 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   abstract sparql(query: SparqlQuery, options?: QueryOptions): Promise<BaseQuery>;
   abstract quads(): PromiseOrValue<Iterable<Quad>, IsSync>;
   abstract find(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): PromiseOrValue<Iterable<Quad>, IsSync>;
+  abstract withIri(iri: NamedNode | DefaultGraph | undefined): this;
 
   protected prepareQuery(query: Query | string, expectedType: string): Query {
     let parsedQuery: SelectQuery | AskQuery | ConstructQuery | DescribeQuery | Update;

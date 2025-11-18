@@ -83,6 +83,23 @@ export class ChangeSetGraph extends BaseGraph<true> {
     this.remove(this.current.quads());
   }
 
+  withIri(iri: NamedNode | DefaultGraph | undefined): this {
+    const resolvedIri = iri || factory.defaultGraph();
+
+    // Create new ChangeSetGraph with the current graph remapped to the new IRI
+    const newGraph = new ChangeSetGraph(this.current.withIri(resolvedIri));
+
+    // Remap the added/removed changesets to use the new IRI
+    newGraph.added = this.added.map(q =>
+      factory.quad(q.subject, q.predicate, q.object, resolvedIri)
+    ) as any;
+    newGraph.removed = this.removed.map(q =>
+      factory.quad(q.subject, q.predicate, q.object, resolvedIri)
+    ) as any;
+
+    return newGraph as this;
+  }
+
   /**
    * Applies this changeset's delta to another graph
    * If a target graph IRI was provided to the constructor, quads will use that as their graph component

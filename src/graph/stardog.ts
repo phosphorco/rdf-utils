@@ -244,9 +244,17 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     if (!this.transactionId) {
       throw new Error('No transaction in progress');
     }
-    
+
     await stardog.db.transaction.rollback(this.connection, this.config.database, this.transactionId);
     this.transactionId = null;
+  }
+
+  withIri(iri: NamedNode | DefaultGraph | undefined): this {
+    const resolvedIri = iri || factory.defaultGraph();
+    const newGraph = new StardogGraph(this.config, resolvedIri, this.reasoning);
+    // Inherit the transaction state from the current graph
+    newGraph.transactionId = this.transactionId;
+    return newGraph as this;
   }
 
   /**

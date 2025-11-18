@@ -354,3 +354,124 @@ describe('ChangeSetGraph - applyDelta() method', () => {
     expect(resultQuad.graph.termType).toBe('DefaultGraph');
   });
 });
+
+describe('ChangeSetGraph - withIri() method', () => {
+  test('should change the IRI of the changeset graph', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const changesetGraph = new ChangeSetGraph(baseGraph);
+    const newIri = EX.newGraph;
+
+    const updatedGraph = changesetGraph.withIri(newIri);
+
+    expect(updatedGraph.iri.equals(newIri)).toBe(true);
+    expect(changesetGraph.iri.equals(EX.original)).toBe(true); // Original unchanged
+  });
+
+  test('should preserve changeset when changing IRI', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const changesetGraph = new ChangeSetGraph(baseGraph);
+
+    const quad1 = factory.quad(EX.subject1, EX.property, factory.literal('value1'));
+    const quad2 = factory.quad(EX.subject2, EX.property, factory.literal('value2'));
+
+    changesetGraph.add([quad1]);
+    changesetGraph.add([quad2]);
+
+    const newIri = EX.newGraph;
+    const updatedGraph = changesetGraph.withIri(newIri);
+
+    expect(updatedGraph.added.size).toBe(2);
+    expect(updatedGraph.removed.size).toBe(0);
+  });
+
+  test('should remap added quads to new IRI', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const changesetGraph = new ChangeSetGraph(baseGraph);
+
+    const quad = factory.quad(EX.subject, EX.property, factory.literal('value'));
+    changesetGraph.add([quad]);
+
+    const newIri = EX.newGraph;
+    const updatedGraph = changesetGraph.withIri(newIri);
+
+    const addedQuads = [...updatedGraph.added];
+    expect(addedQuads.length).toBe(1);
+    expect(addedQuads[0].graph.equals(newIri)).toBe(true);
+  });
+
+  test('should remap removed quads to new IRI', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const quad = factory.quad(EX.subject, EX.property, factory.literal('value'));
+    const baseWithData = baseGraph.add([quad]);
+
+    const changesetGraph = new ChangeSetGraph(baseWithData);
+    changesetGraph.remove([quad]);
+
+    const newIri = EX.newGraph;
+    const updatedGraph = changesetGraph.withIri(newIri);
+
+    const removedQuads = [...updatedGraph.removed];
+    expect(removedQuads.length).toBe(1);
+    expect(removedQuads[0].graph.equals(newIri)).toBe(true);
+  });
+
+  test('should convert undefined to DefaultGraph', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const changesetGraph = new ChangeSetGraph(baseGraph);
+
+    const updatedGraph = changesetGraph.withIri(undefined);
+
+    expect(updatedGraph.iri.termType).toBe('DefaultGraph');
+  });
+
+  test('should preserve content quads when changing IRI', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const quad = factory.quad(EX.subject, EX.property, factory.literal('value'));
+    const baseWithData = baseGraph.add([quad]);
+
+    const changesetGraph = new ChangeSetGraph(baseWithData);
+    const newIri = EX.newGraph;
+    const updatedGraph = changesetGraph.withIri(newIri);
+
+    const currentQuads = [...updatedGraph.current.quads()];
+    expect(currentQuads.length).toBe(1);
+  });
+
+  test('should support chaining withIri calls', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const changesetGraph = new ChangeSetGraph(baseGraph);
+
+    const iri1 = EX.graph1;
+    const iri2 = EX.graph2;
+
+    const g1 = changesetGraph.withIri(iri1);
+    const g2 = g1.withIri(iri2);
+
+    expect(g1.iri.equals(iri1)).toBe(true);
+    expect(g2.iri.equals(iri2)).toBe(true);
+  });
+
+  test('should remap both additions and removals when changing IRI', () => {
+    const baseGraph = new ImmutableSetGraph(EX.original);
+    const existingQuad = factory.quad(EX.existing, EX.property, factory.literal('existing'));
+    const baseWithData = baseGraph.add([existingQuad]);
+
+    const changesetGraph = new ChangeSetGraph(baseWithData);
+    changesetGraph.remove([existingQuad]);
+
+    const newQuad = factory.quad(EX.new, EX.property, factory.literal('new'));
+    changesetGraph.add([newQuad]);
+
+    const newIri = EX.newGraph;
+    const updatedGraph = changesetGraph.withIri(newIri);
+
+    const addedQuads = [...updatedGraph.added];
+    const removedQuads = [...updatedGraph.removed];
+
+    expect(addedQuads.length).toBe(1);
+    expect(removedQuads.length).toBe(1);
+
+    expect(addedQuads[0].graph.equals(newIri)).toBe(true);
+    expect(removedQuads[0].graph.equals(newIri)).toBe(true);
+  });
+});
