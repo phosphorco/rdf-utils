@@ -512,7 +512,6 @@ describe('GraphDB Integration Tests', () => {
       // Enable reasoning for this graph so entailment works
       const graph = new GraphDBGraph(config, testGraphIri, true);
 
-
       // Clean up before test
       try { await graph.deleteAll(); } catch {}
 
@@ -535,14 +534,16 @@ describe('GraphDB Integration Tests', () => {
           factory.namedNode(`${ex}Employee`)
       );
 
+      await graph.add([q1]);
 
       const baseData = async function(graph) {
         const results = await graph.select(`
           PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
           PREFIX ex: <http://example.org/>
+          PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
           
-          SELECT ?p WHERE {
-            ?p a ex:Employee.
+          SELECT ?c WHERE {
+            ?c rdfs:subClassOf ex:Person.
           }
         `);
 
@@ -562,12 +563,16 @@ describe('GraphDB Integration Tests', () => {
         return [...results].length;
       }
 
+      const readGraph = graph.withIri(undefined);
+      expect(await baseData(readGraph)).toBe(1);
+      expect(await entailedData(readGraph)).toBe(0);
+
       expect(async () => {
         await graph.inTransaction(async function (graph) {
 
           const readGraph = graph.withIri(undefined);
 
-          await graph.add([q1, q2]);
+          await graph.add([q2]);
 
           expect(await baseData(readGraph)).toBe(1);
           expect(await entailedData(readGraph)).toBe(1);
@@ -578,8 +583,8 @@ describe('GraphDB Integration Tests', () => {
       }
       ).toThrow();
 
-      const readGraph = graph.withIri(undefined);
-      expect(await baseData(readGraph)).toBe(0);
+
+      expect(await baseData(readGraph)).toBe(1);
       expect(await entailedData(readGraph)).toBe(0);
 
     });

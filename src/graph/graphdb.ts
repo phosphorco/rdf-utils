@@ -363,10 +363,10 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
       return operation(this.transactionUrl);
     }
 
-    const txUrl = await this.beginTransaction();
+    await this.begin();
 
     try {
-      const result = await operation(txUrl);
+      const result = await operation(this.transactionUrl!);
       await this.commit();
       return result;
     } catch (err) {
@@ -472,9 +472,9 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${operation} quads: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to ${operation} quads: ${response.status} ${response.statusText}\n${await response.text()}`);
       }
-    });
+     });
   }
 
   /**
