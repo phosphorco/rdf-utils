@@ -22,6 +22,8 @@ import { Graph, PromiseOrValue, QueryOptions } from '../graph';
 import * as n3 from 'n3';
 import { writeFileSync, readFileSync } from 'fs';
 import { RdfXmlParser } from 'rdfxml-streaming-parser';
+import { JsonLdParser } from 'jsonld-streaming-parser';
+import { JsonLdSerializer } from 'jsonld-streaming-serializer';
 
 export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   iri: NamedNode | DefaultGraph;
@@ -142,6 +144,11 @@ export async function serializeQuads(quads: Iterable<Quad>, options?: { format?:
 
   const quadArray = [...quads];
 
+  // Handle JSON-LD serialization separately
+  if (format === 'application/ld+json' || format === 'json-ld') {
+    return serializeQuadsToJsonLd(quadArray, prefixes, options?.baseIRI);
+  }
+
   quadArray.sort((a, b) => {
     if(a.graph.value != b.graph.value) return a.graph.value.localeCompare(b.graph.value);
     if(a.subject.value != b.subject.value) return a.subject.value.localeCompare(b.subject.value);
@@ -159,6 +166,53 @@ export async function serializeQuads(quads: Iterable<Quad>, options?: { format?:
       writer.end((error, result) => (error ? reject(error) : resolve(result)))
   );
 
+}
+
+/**
+ * Serializes RDF quads to JSON-LD format with an inline context based on prefixes
+ * @param quads - Array of RDF quads
+ * @param prefixes - Prefix map to generate @context
+ * @param baseIRI - Optional base IRI
+ * @returns Promise that resolves to JSON-LD string
+ */
+async function serializeQuadsToJsonLd(quads: rdfjs.Quad[], prefixes: any, baseIRI?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const jsonldQuads: string[] = [];
+
+    // Build context from prefixes
+    const context: any = {};
+    for (const [prefix, iri] of Object.entries(prefixes)) {
+      if (typeof iri === 'string' && prefix !== '') {
+        context[prefix] = iri;
+      }
+    }
+
+    const serializer = new JsonLdSerializer({
+      baseIRI,
+      context,
+      space: '  ' // Use 2-space indentation
+    });
+
+    serializer.on('data', (chunk: Buffer) => {
+      jsonldQuads.push(chunk.toString('utf8'));
+    });
+
+    serializer.on('end', () => {
+      // Combine the JSON-LD chunks into the final result
+      const result = jsonldQuads.join('');
+      resolve(result);
+    });
+
+    serializer.on('error', (error: Error) => {
+      reject(error);
+    });
+
+    // Write quads to serializer
+    for (const quad of quads) {
+      serializer.write(quad);
+    }
+    serializer.end();
+  });
 }
 
 export async function saveQuadsToFile(quads: Iterable<Quad>, path: string, options?: { format?: string, prefixes?: any, baseIRI?: string }): Promise<void> {
@@ -184,6 +238,10 @@ function detectFormat(format?: string, filePath?: string, content?: string): str
     if (format === 'application/trig' || format === 'trig') {
       return 'application/trig';
     }
+    // Normalize JSON-LD format
+    if (format === 'application/ld+json' || format === 'application/json' || format === 'json-ld') {
+      return 'application/ld+json';
+    }
     // Return other formats as-is for n3 parser
     return format;
   }
@@ -206,13 +264,32 @@ function detectFormat(format?: string, filePath?: string, content?: string): str
     if (extension === 'nq') {
       return 'application/n-quads';
     }
+    if (extension === 'jsonld') {
+      return 'application/ld+json';
+    }
   }
 
-  // Detect from content (look for RDF/XML markers)
-  if (content && content.trim().startsWith('<')) {
-    // Check for RDF root element
-    if (content.includes('<rdf:RDF') || content.includes('<RDF')) {
-      return 'application/rdf+xml';
+  // Detect from content
+  if (content) {
+    const trimmedContent = content.trim();
+
+    // Check for RDF/XML markers (XML format)
+    if (trimmedContent.startsWith('<')) {
+      if (trimmedContent.includes('<rdf:RDF') || trimmedContent.includes('<RDF')) {
+        return 'application/rdf+xml';
+      }
+    }
+
+    // Check for JSON-LD markers (JSON format with @context)
+    if (trimmedContent.startsWith('{') || trimmedContent.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmedContent);
+        if (parsed && (parsed['@context'] || (Array.isArray(parsed) && parsed.some(item => item['@context'])))) {
+          return 'application/ld+json';
+        }
+      } catch {
+        // Not valid JSON, continue
+      }
     }
   }
 
@@ -241,7 +318,7 @@ export function parseQuadsFromString(data: string, format?: string, baseIRI?: st
 }
 
 /**
- * Parses RDF data from a string asynchronously. Supports RDF/XML, Turtle, N3, N-Quads, and TriG formats.
+ * Parses RDF data from a string asynchronously. Supports RDF/XML, Turtle, N3, N-Quads, TriG, and JSON-LD formats.
  * @param data - The RDF data as a string
  * @param format - The format of the data (MIME type or format name)
  * @param baseIRI - Optional base IRI for relative IRIs
@@ -270,6 +347,31 @@ export async function parseQuadsFromStringAsync(data: string, format?: string, b
       });
 
       parser.write(data);
+      parser.end();
+    });
+  }
+
+  // Use JSON-LD parser for JSON-LD format
+  if (detectedFormat === 'application/ld+json') {
+    const quads: rdfjs.Quad[] = [];
+
+    return new Promise((resolve, reject) => {
+      const parser = new JsonLdParser({ dataFactory: factory });
+
+      parser.on('data', (quad: rdfjs.Quad) => {
+        quads.push(quad);
+      });
+
+      parser.on('end', () => {
+        resolve(quads);
+      });
+
+      parser.on('error', (error: Error) => {
+        reject(error);
+      });
+
+      // Write data as chunks to the streaming parser
+      parser.write(Buffer.from(data, 'utf8'));
       parser.end();
     });
   }

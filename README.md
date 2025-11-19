@@ -128,7 +128,16 @@ const constructedGraph = await graph.construct(`
 ```
 
 ### Serialization & Parsing
-Import and export RDF data in various formats.
+Import and export RDF data in various formats. Supported formats include:
+
+**Serialization & Parsing:**
+- **Turtle** (`.ttl`, `text/turtle`) - Human-readable RDF format
+- **N-Triples** (`application/n-triples`) - Line-based RDF format
+- **N-Quads** (`application/n-quads`) - Line-based RDF format with named graphs
+- **TriG** (`.trig`, `application/trig`) - Turtle with named graphs support
+- **RDF/XML** (`.rdf`, `application/rdf+xml`) - XML-based RDF format
+- **Notation3** (`.n3`, `text/n3`) - Human-readable format with rules
+- **JSON-LD** (`.jsonld`, `application/ld+json`) - JSON-based Linked Data format
 
 ```typescript
 import { N3Graph } from '@phosphorco/rdf-utils';
@@ -143,13 +152,47 @@ const graph2 = await N3Graph.fromString(`
 `, 'turtle');
 
 // Export to different formats
-const turtle = graph.toString('turtle');
-const ntriples = graph.toString('n-triples');
-const jsonld = graph.toString('json-ld');
+const turtle = await graph.toString('turtle');
+const ntriples = await graph.toString('n-triples');
+const rdfxml = await graph.toString('application/rdf+xml');
+const jsonld = await graph.toString('json-ld');
 
 // Save to file
-await graph.saveToFile('output.ttl', 'turtle');
+await graph.saveToFile('output.ttl', { format: 'turtle' });
+
+// JSON-LD with custom prefixes
+const jsonldWithPrefixes = await graph.toString({
+  format: 'json-ld',
+  prefixes: {
+    'ex': 'http://example.org/',
+    'foaf': 'http://xmlns.com/foaf/0.1/'
+  }
+});
+
+// Parse JSON-LD
+const jsonldData = `{
+  "@context": {
+    "foaf": "http://xmlns.com/foaf/0.1/"
+  },
+  "@id": "http://example.org/alice",
+  "@type": "foaf:Person",
+  "foaf:name": "Alice"
+}`;
+
+const graphFromJsonLd = await N3Graph.fromStringAsync(jsonldData, 'application/ld+json');
 ```
+
+**Format Detection:**
+The library automatically detects formats from:
+- File extensions (`.ttl`, `.rdf`, `.jsonld`, etc.)
+- MIME types (when explicitly provided)
+- Content analysis (JSON-LD objects with `@context`, RDF/XML with `<rdf:RDF>`, etc.)
+
+**JSON-LD Notes:**
+- Full JSON-LD parsing support, including remote contexts, nested objects, and complex structures
+- Serialization generates JSON-LD with inline `@context` derived from available prefixes
+- JSON-LD context information is preserved during parsing and can be included in serialization
+- See `test/jsonld.test.ts` for comprehensive JSON-LD examples
 
 ### Fluent Node API
 The Resource API provides a fluent, Map-like interface for working with 
