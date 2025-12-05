@@ -1,7 +1,7 @@
 import { test, expect, describe, beforeAll, afterAll } from 'bun:test';
 import { GraphDBGraph, GraphDBConfig } from '../src/graph/graphdb.js';
 import { testGraphInterface, testMutableGraphInterface } from '../test/graph.test.js';
-import { testSparqlInterface } from '../test/sparql.test.js';
+import { testSparqlInterface, testSparqlUpdateInterface } from '../test/sparql.test.js';
 import { testPullInterface } from "../test/pull.test.ts";
 import { testTransactionalGraphInterface } from '../test/transactional-graph.test.js';
 import { factory } from '../src/rdf.js';
@@ -102,6 +102,13 @@ describe('GraphDB Integration Tests', () => {
     setupGraphWithQuads
   );
 
+  // Test SPARQL UPDATE interface
+  testSparqlUpdateInterface(
+    'GraphDBGraph',
+    createTestGraph,
+    setupGraphWithQuads
+  );
+
   // Test transactional graph interface
   testTransactionalGraphInterface(
     'GraphDBGraph',
@@ -124,6 +131,83 @@ describe('GraphDB Integration Tests', () => {
 
   // GraphDB-specific tests
   describe('GraphDB-specific functionality', () => {
+
+    describe('SPARQL UPDATE in transactions', () => {
+      test('should execute UPDATE within transaction', async () => {
+        const graph = await createTestGraph();
+
+        const testQuad = factory.quad(
+          factory.namedNode('http://example.org/item'),
+          factory.namedNode('http://example.org/property'),
+          factory.literal('initial value')
+        );
+
+        await graph.add([testQuad]);
+
+        await graph.inTransaction(async (txGraph) => {
+          await txGraph.update(`
+            PREFIX ex: <http://example.org/>
+            DELETE { ex:item ex:property ?old }
+            INSERT { ex:item ex:property "updated via SPARQL UPDATE" }
+            WHERE { ex:item ex:property ?old }
+          `);
+        });
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].object.value).toBe('updated via SPARQL UPDATE');
+
+        await graph.deleteAll();
+      });
+
+      test('should rollback UPDATE on transaction failure', async () => {
+        const graph = await createTestGraph();
+
+        const testQuad = factory.quad(
+          factory.namedNode('http://example.org/item'),
+          factory.namedNode('http://example.org/property'),
+          factory.literal('original value')
+        );
+
+        await graph.add([testQuad]);
+
+        try {
+          await graph.inTransaction(async (txGraph) => {
+            await txGraph.update(`
+              PREFIX ex: <http://example.org/>
+              INSERT DATA { ex:item ex:property "should be rolled back" }
+            `);
+            throw new Error('Deliberate failure');
+          });
+        } catch (err) {
+          // Expected
+        }
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].object.value).toBe('original value');
+
+        await graph.deleteAll();
+      });
+
+      test('should execute UPDATE outside transaction (direct)', async () => {
+        const graph = await createTestGraph();
+
+        // Execute UPDATE directly without transaction
+        await graph.update(`
+          PREFIX ex: <http://example.org/>
+          INSERT DATA {
+            ex:item1 ex:property "value 1" .
+            ex:item2 ex:property "value 2" .
+          }
+        `);
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(2);
+
+        await graph.deleteAll();
+      });
+    });
 
     test('should execute operations within a transaction successfully', async () => {
       const graph = await createTestGraph();

@@ -1,7 +1,7 @@
 import { test, expect, describe, beforeAll, afterAll } from 'bun:test';
 import { StardogGraph, StardogConfig } from '../src/graph/stardog.js';
 import { testGraphInterface, testMutableGraphInterface } from '../test/graph.test.js';
-import { testSparqlInterface } from '../test/sparql.test.js';
+import { testSparqlInterface, testSparqlUpdateInterface } from '../test/sparql.test.js';
 import { testPullInterface } from "../test/pull.test.ts";
 import { testTransactionalGraphInterface } from '../test/transactional-graph.test.js';
 import { factory } from '../src/rdf.js';
@@ -124,6 +124,13 @@ describe('Stardog Integration Tests', () => {
 
   // Test SPARQL interface
   testSparqlInterface(
+    'StardogGraph',
+    createTestGraph,
+    setupGraphWithQuads
+  );
+
+  // Test SPARQL UPDATE interface
+  testSparqlUpdateInterface(
     'StardogGraph',
     createTestGraph,
     setupGraphWithQuads
@@ -547,6 +554,111 @@ describe('Stardog Integration Tests', () => {
         // Clean up
         try { await graph.deleteAll(); } catch {}
       }
+    });
+
+    describe('SPARQL UPDATE in transactions', () => {
+      test('should execute UPDATE within transaction', async () => {
+        const graph = await createTestGraph();
+
+        const testQuad = factory.quad(
+          factory.namedNode('http://example.org/item'),
+          factory.namedNode('http://example.org/property'),
+          factory.literal('initial value')
+        );
+
+        await graph.add([testQuad]);
+
+        await graph.inTransaction(async (txGraph) => {
+          await txGraph.update(`
+            PREFIX ex: <http://example.org/>
+            DELETE { ex:item ex:property ?old }
+            INSERT { ex:item ex:property "updated via SPARQL UPDATE" }
+            WHERE { ex:item ex:property ?old }
+          `);
+        });
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].object.value).toBe('updated via SPARQL UPDATE');
+
+        await graph.deleteAll();
+      });
+
+      test('should rollback UPDATE on transaction failure', async () => {
+        const graph = await createTestGraph();
+
+        const testQuad = factory.quad(
+          factory.namedNode('http://example.org/item'),
+          factory.namedNode('http://example.org/property'),
+          factory.literal('original value')
+        );
+
+        await graph.add([testQuad]);
+
+        try {
+          await graph.inTransaction(async (txGraph) => {
+            await txGraph.update(`
+              PREFIX ex: <http://example.org/>
+              INSERT DATA { ex:item ex:property "should be rolled back" }
+            `);
+            throw new Error('Deliberate failure');
+          });
+        } catch (err) {
+          // Expected
+        }
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].object.value).toBe('original value');
+
+        await graph.deleteAll();
+      });
+
+      test('should execute UPDATE with reasoning pragma', async () => {
+        await clearDatabase();
+
+        const graph = new StardogGraph(config, testGraphIri, true);
+        const schemaGraphIri = factory.namedNode('tag:stardog:api:context:schema');
+        const schemaGraph = new StardogGraph(config, schemaGraphIri, true);
+
+        try {
+          // Add schema
+          await schemaGraph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/Employee'),
+              factory.namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'),
+              factory.namedNode('http://xmlns.com/foaf/0.1/Person')
+            )
+          ]);
+
+          // Add instance
+          await graph.add([
+            factory.quad(
+              factory.namedNode('http://example.org/John'),
+              factory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+              factory.namedNode('http://example.org/Employee')
+            )
+          ]);
+
+          // UPDATE using inferred type (with reasoning)
+          await graph.update(`
+            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+            PREFIX ex: <http://example.org/>
+            INSERT { ?person ex:verified true }
+            WHERE { ?person a foaf:Person }
+          `);
+
+          // Should have added the verified triple (John inferred as Person)
+          const quads = [...await graph.quads()];
+          const verifiedQuad = quads.find(q =>
+            q.predicate.value === 'http://example.org/verified'
+          );
+          expect(verifiedQuad).toBeDefined();
+
+        } finally {
+          await clearDatabase();
+        }
+      });
     });
 
     describe('Per-Query Reasoning Override (Pragma Directives)', () => {

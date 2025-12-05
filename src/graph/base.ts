@@ -64,6 +64,82 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
     return parsedQuery;
   }
 
+  protected prepareUpdate(update: Update | string): Update {
+    let parsedUpdate: Update;
+    try {
+      parsedUpdate = typeof update === 'string'
+        ? new Parser({prefixes: globalPrefixMap}).parse(update) as Update
+        : update;
+    } catch (err) {
+      console.error("Error parsing update:", update);
+      throw err;
+    }
+
+    if (parsedUpdate.type !== 'update') {
+      throw new Error(`Expected update query, got ${parsedUpdate.type}`);
+    }
+
+    // Inject graph context for INSERT DATA / DELETE DATA operations
+    // For these operations, we need to wrap triples in a GRAPH pattern
+    if (this.iri.termType === 'NamedNode') {
+      const graphIri = this.iri as NamedNode;
+      parsedUpdate.updates = parsedUpdate.updates.map(op => {
+        if ('updateType' in op) {
+          // For insert/delete (INSERT DATA / DELETE DATA), wrap triples in GRAPH pattern
+          if (op.updateType === 'insert' && op.insert) {
+            return {
+              ...op,
+              insert: this.wrapInGraph(op.insert, graphIri)
+            } as typeof op;
+          }
+          if (op.updateType === 'delete' && op.delete) {
+            return {
+              ...op,
+              delete: this.wrapInGraph(op.delete, graphIri)
+            } as typeof op;
+          }
+          // For insertdelete (DELETE/INSERT WHERE), set the graph property
+          if (op.updateType === 'insertdelete' && !op.graph) {
+            return { ...op, graph: graphIri } as typeof op;
+          }
+          // For deletewhere, wrap the delete patterns in GRAPH
+          if (op.updateType === 'deletewhere' && op.delete) {
+            return {
+              ...op,
+              delete: this.wrapInGraph(op.delete, graphIri)
+            } as typeof op;
+          }
+        }
+        return op;
+      });
+    }
+
+    parsedUpdate.prefixes = {...globalPrefixMap, ...parsedUpdate.prefixes};
+    return parsedUpdate;
+  }
+
+  /**
+   * Wraps quad patterns in a GRAPH pattern for INSERT DATA / DELETE DATA
+   */
+  private wrapInGraph(patterns: any[], graphIri: NamedNode): any[] {
+    return patterns.map(pattern => {
+      // If already a graph pattern, skip
+      if (pattern.type === 'graph') {
+        return pattern;
+      }
+      // Wrap bgp patterns in a graph pattern
+      if (pattern.type === 'bgp') {
+        return {
+          type: 'graph',
+          name: graphIri,
+          triples: pattern.triples
+        };
+      }
+      // For other patterns, return as-is
+      return pattern;
+    });
+  }
+
   async ask(query: AskQuery | string, options?: QueryOptions): Promise<boolean> {
     const q = this.prepareQuery(query, "ASK");
     const sparqlQ = await this.sparql(q, options);

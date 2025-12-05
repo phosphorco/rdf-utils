@@ -1,7 +1,7 @@
 import { NamedNode, Quad, BaseQuad, Term, Variable, DefaultGraph, Quad_Object, Quad_Subject, BlankNode, factory } from 'rdf';
 import * as rdfjs from '@rdfjs/types';
 import type { Bindings } from "@rdfjs/types" ;
-import {AskQuery, ConstructQuery, SelectQuery} from 'sparqljs';
+import {AskQuery, ConstructQuery, SelectQuery, Update} from 'sparqljs';
 import Immutable from "immutable";
 import {ChangeSetGraph} from "./graph/changeset";
 
@@ -36,6 +36,7 @@ export interface MutableGraph<IsSync> extends Graph<IsSync> {
   add(quads: Iterable<rdfjs.Quad>): PromiseOrValue<this, IsSync>;
   remove(quads: Iterable<rdfjs.Quad>): PromiseOrValue<this, IsSync>;
   deleteAll(): PromiseOrValue<void, IsSync>;
+  update(query: Update | string, options?: QueryOptions): Promise<void>;
 }
 
 export interface ImmutableGraph<IsSync> extends Graph<IsSync> {

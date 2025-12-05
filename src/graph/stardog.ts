@@ -3,7 +3,7 @@ import * as rdfjs from '@rdfjs/types'
 import { NamedNode, DefaultGraph, factory, Quad } from '../rdf';
 import { MutableGraph, TransactionalGraph, QueryOptions } from '../graph';
 import { BaseGraph, serializeQuads, saveQuadsToFile } from './base';
-import { Query, Generator, SparqlQuery, SelectQuery, ConstructQuery } from 'sparqljs';
+import { Query, Generator, SparqlQuery, SelectQuery, ConstructQuery, Update } from 'sparqljs';
 import * as stardog from 'stardog';
 import * as N3 from 'n3';
 
@@ -61,11 +61,6 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
     // Stardog context values like 'stardog:context:all' are vendor-specific extensions
     // that violate standard SPARQL grammar but are accepted by Stardog
     queryString = queryString.replace(/<(stardog:context:\w+)>/g, '$1');
-
-    // Check if this is an Update query (not supported)
-    if ('updateType' in query) {
-      throw new Error('Update queries are not supported. Use add/delete methods instead.');
-    }
 
     // Apply reasoning pragma if explicitly specified in options
     // This overrides the graph-level reasoning setting and works in transactions
@@ -315,6 +310,59 @@ export class StardogGraph extends BaseGraph<false> implements MutableGraph<false
       await stardog.db.graph.doDelete(this.connection, this.config.database, this.iri.value, {});
     } else {
       throw new Error('Cannot delete all quads from default graph');
+    }
+  }
+
+  /**
+   * Execute a SPARQL UPDATE query (INSERT, DELETE, INSERT-DELETE, DELETE WHERE)
+   */
+  async update(query: Update | string, options?: QueryOptions): Promise<void> {
+    const parsedUpdate = this.prepareUpdate(query);
+    const generator = new Generator({ prefixes: parsedUpdate.prefixes });
+    let queryString = generator.stringify(parsedUpdate);
+
+    // Handle Stardog-specific special values
+    queryString = queryString.replace(/<(stardog:context:\w+)>/g, '$1');
+
+    // Apply reasoning pragma if specified
+    if (options?.reasoning !== undefined) {
+      const pragma = options.reasoning ? '#pragma reasoning on' : '#pragma reasoning off';
+      queryString = pragma + '\n' + queryString;
+    }
+
+    await this.executeUpdate(queryString);
+  }
+
+  /**
+   * Execute a SPARQL UPDATE query string
+   */
+  private async executeUpdate(queryString: string): Promise<void> {
+    if (this.transactionId) {
+      const result = await stardog.query.executeInTransaction(
+        this.connection,
+        this.config.database,
+        this.transactionId,
+        queryString,
+        { accept: 'application/sparql-results+json' as any },
+        { reasoning: this.reasoning }
+      );
+      if (!result.ok) {
+        throw new Error(`Update failed: ${result.statusText}`);
+      }
+    } else {
+      await this.executeWithTransaction(async (txId) => {
+        const result = await stardog.query.executeInTransaction(
+          this.connection,
+          this.config.database,
+          txId,
+          queryString,
+          { accept: 'application/sparql-results+json' as any },
+          { reasoning: this.reasoning }
+        );
+        if (!result.ok) {
+          throw new Error(`Update failed: ${result.statusText}`);
+        }
+      });
     }
   }
 

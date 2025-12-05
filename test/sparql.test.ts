@@ -4,6 +4,7 @@ import { N3Graph } from '../src/graph/n3.js';
 import { ImmutableSetGraph } from '../src/graph/immutable.js';
 import { factory, namespace } from '../src/rdf.js';
 import type { Quad } from '../src/rdf.js';
+import type { Update } from 'sparqljs';
 
 const EX = namespace('http://example.org/');
 const FOAF = namespace('http://xmlns.com/foaf/0.1/');
@@ -299,6 +300,122 @@ export function testSparqlInterface<G extends Graph<any>>(
   });
 }
 
+/**
+ * Generic test suite for SPARQL UPDATE functionality on MutableGraph interface
+ */
+export function testSparqlUpdateInterface<G extends MutableGraph<any>>(
+  name: string,
+  createGraph: () => Promise<G>,
+  setupGraph: (graph: G, quads: Quad[]) => Promise<G>
+) {
+  describe(`${name} - SPARQL UPDATE Interface`, () => {
+
+    test('INSERT DATA adds triples', async () => {
+      const graph = await createGraph();
+
+      await graph.update(`
+        PREFIX ex: <http://example.org/>
+        INSERT DATA {
+          ex:subject ex:predicate "value" .
+        }
+      `);
+
+      const quads = [...await graph.quads()];
+      expect(quads.length).toBe(1);
+      expect(quads[0].subject.value).toBe('http://example.org/subject');
+      expect(quads[0].predicate.value).toBe('http://example.org/predicate');
+      expect(quads[0].object.value).toBe('value');
+    });
+
+    test('DELETE DATA removes triples', async () => {
+      const graph = await setupGraph(await createGraph(), testQuads);
+      const before = [...await graph.quads()].length;
+
+      await graph.update(`
+        PREFIX ex: <http://example.org/>
+        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        DELETE DATA {
+          ex:alice foaf:knows ex:bob .
+        }
+      `);
+
+      const after = [...await graph.quads()].length;
+      expect(after).toBe(before - 1);
+
+      // Verify the specific triple is gone
+      const remaining = [...await graph.quads()];
+      const aliceKnowsBob = remaining.find(q =>
+        q.subject.value === EX.alice.value &&
+        q.predicate.value === FOAF.knows.value &&
+        q.object.value === EX.bob.value
+      );
+      expect(aliceKnowsBob).toBeUndefined();
+    });
+
+    test('DELETE WHERE with pattern matching', async () => {
+      const graph = await setupGraph(await createGraph(), testQuads);
+
+      await graph.update(`
+        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        DELETE WHERE {
+          ?s foaf:knows ?o .
+        }
+      `);
+
+      const quads = [...await graph.quads()];
+      const knowsTriples = quads.filter(q =>
+        q.predicate.value === FOAF.knows.value
+      );
+      expect(knowsTriples.length).toBe(0);
+    });
+
+    test('INSERT-DELETE combined operation', async () => {
+      const graph = await setupGraph(await createGraph(), testQuads);
+
+      await graph.update(`
+        PREFIX ex: <http://example.org/>
+        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        DELETE { ?person foaf:name ?oldName }
+        INSERT { ?person foaf:name "Updated Name" }
+        WHERE {
+          ?person foaf:name ?oldName .
+          FILTER(?person = ex:alice)
+        }
+      `);
+
+      const quads = [...await graph.quads()];
+      const aliceName = quads.find(q =>
+        q.subject.value === EX.alice.value &&
+        q.predicate.value === FOAF.name.value
+      );
+      expect(aliceName?.object.value).toBe('Updated Name');
+    });
+
+    test('no-op when WHERE matches nothing', async () => {
+      const graph = await setupGraph(await createGraph(), testQuads);
+      const before = [...await graph.quads()].length;
+
+      await graph.update(`
+        PREFIX ex: <http://example.org/>
+        DELETE { ?s ?p ?o }
+        WHERE {
+          ex:nonexistent ?p ?o .
+          ?s ?p ?o .
+        }
+      `);
+
+      const after = [...await graph.quads()].length;
+      expect(after).toBe(before);
+    });
+
+    test('rejects invalid syntax', async () => {
+      const graph = await createGraph();
+
+      await expect(graph.update('INVALID SYNTAX HERE')).rejects.toThrow();
+    });
+  });
+}
+
 // Test against concrete implementations
 testSparqlInterface(
   'N3Graph',
@@ -314,5 +431,15 @@ testSparqlInterface(
   async () => new ImmutableSetGraph(),
   async (graph, quads) => {
     return await graph.add(quads);
+  }
+);
+
+// Test SPARQL UPDATE on MutableGraph implementations
+testSparqlUpdateInterface(
+  'N3Graph',
+  async () => new N3Graph(),
+  async (graph, quads) => {
+    graph.add(quads);
+    return graph;
   }
 );

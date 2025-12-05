@@ -3,7 +3,7 @@ import * as rdfjs from '@rdfjs/types'
 import { NamedNode, DefaultGraph, factory, Quad } from '../rdf';
 import { MutableGraph, TransactionalGraph, QueryOptions } from '../graph';
 import { BaseGraph, serializeQuads, saveQuadsToFile } from './base';
-import { Query, Generator, SparqlQuery, SelectQuery, ConstructQuery } from 'sparqljs';
+import { Query, Generator, SparqlQuery, SelectQuery, ConstructQuery, Update } from 'sparqljs';
 import * as N3 from 'n3';
 
 /**
@@ -44,11 +44,6 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
   async sparql(query: SparqlQuery, options?: QueryOptions): Promise<BaseQuery> {
     const generator = new Generator({ prefixes: {} });
     let queryString = generator.stringify(query);
-
-    // Check if this is an Update query (not supported)
-    if ('updateType' in query) {
-      throw new Error('Update queries are not supported. Use add/delete methods instead.');
-    }
 
     const queryType = (query as Query).queryType;
     const contentType = this.getContentType(queryType);
@@ -252,6 +247,49 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
       }
     } else {
       throw new Error('Cannot delete all quads from default graph');
+    }
+  }
+
+  /**
+   * Execute a SPARQL UPDATE query (INSERT, DELETE, INSERT-DELETE, DELETE WHERE)
+   */
+  async update(query: Update | string, options?: QueryOptions): Promise<void> {
+    const parsedUpdate = this.prepareUpdate(query);
+    const generator = new Generator({ prefixes: parsedUpdate.prefixes });
+    const queryString = generator.stringify(parsedUpdate);
+
+    await this.executeUpdate(queryString, options);
+  }
+
+  /**
+   * Execute a SPARQL UPDATE query string
+   */
+  private async executeUpdate(queryString: string, options?: QueryOptions): Promise<void> {
+    const useReasoning = options?.reasoning ?? this.reasoning;
+
+    if (this.transactionUrl) {
+      const response = await fetch(`${this.transactionUrl}?action=UPDATE`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/sparql-update' },
+        body: queryString,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Update failed: ${response.status} ${response.statusText}\n${text}`);
+      }
+    } else {
+      // Direct update without transaction - use SPARQL Update endpoint
+      const url = this.getStatementsUrl();
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sparql-update' },
+        body: queryString,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Update failed: ${response.status} ${response.statusText}\n${text}`);
+      }
     }
   }
 

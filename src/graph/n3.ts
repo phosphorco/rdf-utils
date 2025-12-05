@@ -8,7 +8,8 @@ import {
   AskQuery,
   ConstructQuery,
   Query,
-  SparqlQuery
+  SparqlQuery,
+  Update
 } from 'sparqljs';
 import type { Bindings, Term } from '@rdfjs/types';
 import * as rdfjs from '@rdfjs/types';
@@ -67,6 +68,14 @@ export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
     for (const quad of quadsToRemove) {
       this.store.removeQuad(quad);
     }
+  }
+
+  async update(query: Update | string, options?: QueryOptions): Promise<void> {
+    const parsedUpdate = this.prepareUpdate(query);
+    const generator = new Generator({ prefixes: parsedUpdate.prefixes });
+    const queryString = generator.stringify(parsedUpdate);
+
+    await this.queryEngine.queryVoid(queryString, { sources: [this.store] });
   }
 
   withIri(iri: NamedNode | DefaultGraph | undefined): this {
