@@ -592,6 +592,84 @@ describe('GraphDB Integration Tests', () => {
       }
     });
 
+    test('BUG: reasoning: false option should be respected for in-transaction queries', async () => {
+      // This test demonstrates the bug where the infer parameter is not passed
+      // to GraphDB when executing SPARQL queries within a transaction context.
+      // The bug causes { reasoning: false } to be silently ignored, and GraphDB
+      // defaults to infer=true.
+      //
+      // Root cause: In src/graph/graphdb.ts executeQuery(), the transaction path
+      // uses `${this.transactionUrl}?action=QUERY` without the infer parameter,
+      // while the non-transaction path correctly uses buildQueryUrl() which adds ?infer=true|false
+
+      const graph = new GraphDBGraph(config, testGraphIri, true); // default reasoning=true
+      const defaultGraph = new GraphDBGraph(config, undefined, true);
+
+      try {
+        // Clean up
+        try { await graph.deleteAll(); } catch {}
+
+        // Define namespaces for schema relationships
+        const rdfs = 'http://www.w3.org/2000/01/rdf-schema#';
+        const rdf = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+        const ex = 'http://example.org/reasoning-tx-bug/';
+
+        // Add schema: Employee is a subclass of Person
+        const subClassOfQuad = factory.quad(
+          factory.namedNode(`${ex}Employee`),
+          factory.namedNode(`${rdfs}subClassOf`),
+          factory.namedNode(`${ex}Person`)
+        );
+
+        // Add instance: john is an Employee (explicit)
+        const typeQuad = factory.quad(
+          factory.namedNode(`${ex}john`),
+          factory.namedNode(`${rdf}type`),
+          factory.namedNode(`${ex}Employee`)
+        );
+
+        await graph.add([subClassOfQuad, typeQuad]);
+
+        // Query for ENTAILED data (not explicitly added)
+        // john should be inferred as a Person because Employee subClassOf Person
+        const entailedQuery = `
+          ASK WHERE {
+            <${ex}john> <${rdf}type> <${ex}Person> .
+          }
+        `;
+
+        // FIRST: Verify the test setup works outside transactions
+        // With reasoning enabled, should find entailed triple
+        const resultWithReasoningOutsideTx = await defaultGraph.ask(entailedQuery, { reasoning: true });
+        expect(resultWithReasoningOutsideTx).toBe(true);
+
+        // Without reasoning, should NOT find entailed triple (outside transaction)
+        const resultWithoutReasoningOutsideTx = await defaultGraph.ask(entailedQuery, { reasoning: false });
+        expect(resultWithoutReasoningOutsideTx).toBe(false);
+
+        // NOW: Test inside a transaction - this is where the bug manifests
+        await graph.inTransaction(async (txGraph) => {
+          const txDefaultGraph = txGraph.withIri(undefined);
+
+          // With reasoning: true inside transaction - should find entailed triple
+          const resultWithReasoningInTx = await txDefaultGraph.ask(entailedQuery, { reasoning: true });
+          expect(resultWithReasoningInTx).toBe(true);
+
+          // BUG: With reasoning: false inside transaction - should NOT find entailed triple
+          // But due to the bug, this returns true because infer param is not passed
+          const resultWithoutReasoningInTx = await txDefaultGraph.ask(entailedQuery, { reasoning: false });
+
+          // This assertion will FAIL until the bug is fixed:
+          // Expected: false (no inferred data when reasoning is disabled)
+          // Actual (buggy): true (reasoning: false is ignored, infer defaults to true)
+          expect(resultWithoutReasoningInTx).toBe(false);
+        });
+
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
     test('should handle entailed data within transaction and rollback both explicit and entailed triples', async () => {
       // Enable reasoning for this graph so entailment works
       const graph = new GraphDBGraph(config, testGraphIri, true);

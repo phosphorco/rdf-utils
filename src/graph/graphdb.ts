@@ -298,7 +298,7 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
    */
   private async executeQuery(queryString: string, contentType: string, useReasoning: boolean): Promise<any> {
     const response = this.transactionUrl ?
-      await fetch(`${this.transactionUrl}?action=QUERY`, {
+      await fetch(`${this.transactionUrl}?action=QUERY&infer=${useReasoning}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/sparql-query',
