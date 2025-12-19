@@ -175,5 +175,61 @@ export function testTransactionalGraphInterface<G extends TransactionalGraph<any
       expect(removedQuad).toBeUndefined();
       expect(remainingQuad).toBeDefined();
     });
+
+    test('should DELETE data that was ADDed in the same transaction', async () => {
+      const graph = await createGraph();
+      if (cleanupGraph) await cleanupGraph(graph);
+
+      try {
+
+        await graph.begin();
+
+        console.log("graph IRI:" + graph.iri.value);
+
+        // ADD a quad with EXPLICIT graph component (matching necromancy test structure)
+        const graphNode = graph.iri;
+        const node = EX.exampleNode;
+        const quad = factory.quad(
+           node,
+            EX.definition,
+            factory.literal('test definition sparql'),
+            graphNode  // Explicit graph component - this is key!
+        );
+        await graph.add([quad]);
+
+        // Verify it exists within the transaction using SPARQL SELECT
+        const afterAdd = await graph.select(
+            `SELECT ?def WHERE { <${node.value}> <${EX.definition.value}> ?def }`
+        );
+        const afterAddResults = [...afterAdd];
+        expect(afterAddResults.length).toBe(1);
+
+        // DELETE the same quad within the same transaction
+        await graph.remove([quad]);
+
+        // Check within transaction using SPARQL SELECT - DELETE should remove the data
+        const afterDelete = await graph.select(
+            `SELECT ?def WHERE { <${node.value}> <${EX.definition.value}> ?def }`
+        );
+
+        const afterDeleteResults = [...afterDelete];
+        expect(afterDeleteResults.length).toBe(0);
+
+        await graph.commit();
+
+        // After commit - the data should be gone
+        const afterCommit = await graph.select(
+            `SELECT ?def WHERE { <${node.value}> <${EX.definition.value}> ?def }`
+        );
+        const afterCommitResults = [...afterCommit];
+        expect(afterCommitResults.length).toBe(0);
+
+      } finally {
+        try { await graph.rollback() } catch(e) { }
+      }
+    });
+
+
   });
+
 }

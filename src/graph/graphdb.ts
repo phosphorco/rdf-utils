@@ -492,27 +492,101 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
     }
 
     const quadWithGraph = this.applyGraphContext(quadArray);
-    const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
 
     await this.executeWithTransaction(async (txUrl) => {
-      // When txUrl is provided, we're in a transaction context
-      // Use PUT with action parameter for transaction mutations
-      const method = 'PUT';
-      const action = operation === 'add' ? 'ADD' : 'DELETE';
-      const url = `${txUrl}?action=${action}`;
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/n-quads',
-        },
-        body: nquads,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to ${operation} quads: ${response.status} ${response.statusText}\n${await response.text()}`);
+      if (operation === 'add') {
+        // ADD uses REST API with N-Quads
+        const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
+        const response = await fetch(`${txUrl}?action=ADD`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/n-quads' },
+          body: nquads,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to add quads: ${response.status} ${response.statusText}\n${await response.text()}`);
+        }
+      } else {
+        // DELETE uses SPARQL UPDATE to correctly see uncommitted changes within transaction
+        // (GraphDB's REST ?action=DELETE has snapshot isolation and doesn't see in-tx ADDs)
+        const deleteQuery = this.buildDeleteDataQuery(quadWithGraph);
+        const response = await fetch(`${txUrl}?action=UPDATE`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/sparql-update' },
+          body: deleteQuery,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to remove quads: ${response.status} ${response.statusText}\n${await response.text()}`);
+        }
       }
-     });
+    });
+  }
+
+  /**
+   * Build a SPARQL DELETE DATA query from quads
+   */
+  private buildDeleteDataQuery(quads: Quad[]): string {
+    // Group quads by graph
+    const byGraph = new Map<string, Quad[]>();
+    for (const quad of quads) {
+      const graphKey = quad.graph.termType === 'DefaultGraph' ? '' : quad.graph.value;
+      if (!byGraph.has(graphKey)) {
+        byGraph.set(graphKey, []);
+      }
+      byGraph.get(graphKey)!.push(quad);
+    }
+
+    // Build DELETE DATA query
+    let query = 'DELETE DATA {\n';
+    for (const [graphIri, graphQuads] of byGraph) {
+      if (graphIri) {
+        query += `  GRAPH <${graphIri}> {\n`;
+        for (const quad of graphQuads) {
+          query += `    ${this.termToSparql(quad.subject)} ${this.termToSparql(quad.predicate)} ${this.termToSparql(quad.object)} .\n`;
+        }
+        query += '  }\n';
+      } else {
+        for (const quad of graphQuads) {
+          query += `  ${this.termToSparql(quad.subject)} ${this.termToSparql(quad.predicate)} ${this.termToSparql(quad.object)} .\n`;
+        }
+      }
+    }
+    query += '}';
+    return query;
+  }
+
+  /**
+   * Serialize an RDF term to SPARQL syntax
+   */
+  private termToSparql(term: Term): string {
+    switch (term.termType) {
+      case 'NamedNode':
+        return `<${term.value}>`;
+      case 'BlankNode':
+        return `_:${term.value}`;
+      case 'Literal':
+        const lit = term as any;
+        let result = `"${this.escapeSparqlString(lit.value)}"`;
+        if (lit.language) {
+          result += `@${lit.language}`;
+        } else if (lit.datatype && lit.datatype.value !== 'http://www.w3.org/2001/XMLSchema#string') {
+          result += `^^<${lit.datatype.value}>`;
+        }
+        return result;
+      default:
+        throw new Error(`Cannot serialize term type ${term.termType} to SPARQL`);
+    }
+  }
+
+  /**
+   * Escape special characters in a SPARQL string literal
+   */
+  private escapeSparqlString(str: string): string {
+    return str
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
   }
 
   /**
