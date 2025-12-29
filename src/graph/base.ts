@@ -40,7 +40,8 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   protected prepareQuery(query: Query | string, expectedType: string): Query {
     let parsedQuery: SelectQuery | AskQuery | ConstructQuery | DescribeQuery | Update;
     try {
-      parsedQuery = typeof query === 'string' ? new Parser({prefixes: globalPrefixMap}).parse(query) : query;
+      // Enable sparqlStar for RDF-star / SPARQL-star triple term syntax support
+      parsedQuery = typeof query === 'string' ? new Parser({prefixes: globalPrefixMap, sparqlStar: true}).parse(query) : query;
     } catch (err) {
       console.error("Error parsing query:", query);
       throw err;
@@ -67,8 +68,9 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
   protected prepareUpdate(update: Update | string): Update {
     let parsedUpdate: Update;
     try {
+      // Enable sparqlStar for RDF-star / SPARQL-star triple term syntax support
       parsedUpdate = typeof update === 'string'
-        ? new Parser({prefixes: globalPrefixMap}).parse(update) as Update
+        ? new Parser({prefixes: globalPrefixMap, sparqlStar: true}).parse(update) as Update
         : update;
     } catch (err) {
       console.error("Error parsing update:", update);
@@ -211,8 +213,42 @@ export abstract class BaseGraph<IsSync> implements Graph<IsSync> {
 
 // Helper functions for implementations to use
 
+/**
+ * Checks if any quad in the iterable contains triple terms (embedded quads) in subject or object position.
+ * Used to determine if RDF-star serialization format is needed.
+ */
+function containsTripleTerms(quads: rdfjs.Quad[]): boolean {
+  for (const q of quads) {
+    if (q.subject.termType === 'Quad' || q.object.termType === 'Quad') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Converts a standard RDF format to its RDF-star variant for N3.js
+ */
+function toStarFormat(format: string | undefined): string | undefined {
+  if (!format) return undefined;
+
+  // Map standard formats to star variants
+  const formatMap: Record<string, string> = {
+    'text/turtle': 'text/turtle*',
+    'turtle': 'turtle*',
+    'application/trig': 'application/trig*',
+    'trig': 'trig*',
+    'application/n-triples': 'application/n-triples*',
+    'n-triples': 'n-triples*',
+    'application/n-quads': 'application/n-quads*',
+    'n-quads': 'n-quads*',
+  };
+
+  return formatMap[format.toLowerCase()] || format;
+}
+
 export async function serializeQuads(quads: Iterable<Quad>, options?: { format?: string, prefixes?: any, baseIRI?: string }): Promise<string> {
-  const format = options?.format;
+  let format = options?.format;
   const prefixes = {...globalPrefixMap, ...options?.prefixes };
   if(options?.baseIRI) {
     prefixes[""] = options.baseIRI;
@@ -223,6 +259,11 @@ export async function serializeQuads(quads: Iterable<Quad>, options?: { format?:
   // Handle JSON-LD serialization separately
   if (format === 'application/ld+json' || format === 'json-ld') {
     return serializeQuadsToJsonLd(quadArray, prefixes, options?.baseIRI);
+  }
+
+  // Auto-detect if we need RDF-star format
+  if (containsTripleTerms(quadArray)) {
+    format = toStarFormat(format);
   }
 
   quadArray.sort((a, b) => {
@@ -310,9 +351,16 @@ function detectFormat(format?: string, filePath?: string, content?: string): str
     if (format === 'application/rdf+xml' || format === 'text/rdf+xml' || format === 'rdf/xml' || format === 'rdfxml') {
       return 'application/rdf+xml';
     }
-    // Normalize trig format
+    // Normalize trig format (including star variants)
     if (format === 'application/trig' || format === 'trig') {
       return 'application/trig';
+    }
+    if (format === 'application/trig*' || format === 'trig*' || format === 'trigstar') {
+      return 'application/trig*';
+    }
+    // Normalize turtle format (including star variants)
+    if (format === 'text/turtle*' || format === 'turtle*' || format === 'turtlestar') {
+      return 'text/turtle*';
     }
     // Normalize JSON-LD format
     if (format === 'application/ld+json' || format === 'application/json' || format === 'json-ld') {
@@ -351,7 +399,8 @@ function detectFormat(format?: string, filePath?: string, content?: string): str
 
     // Check for RDF/XML markers (XML format)
     if (trimmedContent.startsWith('<')) {
-      if (trimmedContent.includes('<rdf:RDF') || trimmedContent.includes('<RDF')) {
+      // But not if it starts with << which is RDF-star syntax
+      if (!trimmedContent.startsWith('<<') && (trimmedContent.includes('<rdf:RDF') || trimmedContent.includes('<RDF'))) {
         return 'application/rdf+xml';
       }
     }
@@ -366,6 +415,11 @@ function detectFormat(format?: string, filePath?: string, content?: string): str
       } catch {
         // Not valid JSON, continue
       }
+    }
+
+    // Detect RDF-star syntax (embedded triples with << >>)
+    if (trimmedContent.includes('<<') && trimmedContent.includes('>>')) {
+      return 'text/turtle*';
     }
   }
 

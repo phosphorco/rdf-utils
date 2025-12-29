@@ -160,21 +160,38 @@ export class ImmutableDataFactory implements RDFJS.DataFactory {
   }
 
   fromQuad(original: RDFJS.Quad): Quad {
-    const subject = original.subject;
-    const predicate = original.predicate;
-    const object = original.object;
-    const graph = original.graph;
-
     if('hashCode' in original && 'equals' in original) {
       return original as Quad;
-    } else {
-      return new ImmutableBaseQuad(
-          this.fromTerm(subject),
-          this.fromTerm(predicate),
-          this.fromTerm(object),
-          this.fromTerm(graph)
-      ) as Quad;
     }
+
+    // Recursively convert subject if it's a Quad (triple term)
+    const s = original.subject.termType === 'Quad'
+      ? this.fromQuad(original.subject as RDFJS.Quad)
+      : this.fromTerm(original.subject);
+
+    // Predicate is always NamedNode or Variable
+    const p = this.fromTerm(original.predicate);
+
+    // Recursively convert object if it's a Quad (triple term)
+    const o = original.object.termType === 'Quad'
+      ? this.fromQuad(original.object as RDFJS.Quad)
+      : this.fromTerm(original.object);
+
+    const g = original.graph ? this.fromTerm(original.graph) : this.defaultGraph();
+
+    return new ImmutableBaseQuad(s, p, o, g) as Quad;
+  }
+
+  /**
+   * Creates a triple term (RDF-star / RDF 1.2) - a quad that can be used as subject or object of another quad.
+   * Triple terms are quads in the default graph with termType "Quad".
+   * @param subject - The subject of the triple term
+   * @param predicate - The predicate of the triple term
+   * @param object - The object of the triple term
+   * @returns A Quad suitable for use as a triple term
+   */
+  tripleTerm(subject: RDFJS.Quad_Subject, predicate: RDFJS.Quad_Predicate, object: RDFJS.Quad_Object): Quad {
+    return this.quad(subject, predicate, object, this.defaultGraph());
   }
 
   fromTerm(original: RDFJS.NamedNode): NamedNode;

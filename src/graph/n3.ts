@@ -72,7 +72,8 @@ export class N3Graph extends BaseGraph<true> implements MutableGraph<true> {
 
   async update(query: Update | string, options?: QueryOptions): Promise<void> {
     const parsedUpdate = this.prepareUpdate(query);
-    const generator = new Generator({ prefixes: parsedUpdate.prefixes });
+    // Enable sparqlStar for RDF-star / SPARQL-star triple term support
+    const generator = new Generator({ prefixes: parsedUpdate.prefixes, sparqlStar: true });
     const queryString = generator.stringify(parsedUpdate);
 
     await this.queryEngine.queryVoid(queryString, { sources: [this.store] });

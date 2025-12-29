@@ -42,7 +42,8 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
   }
 
   async sparql(query: SparqlQuery, options?: QueryOptions): Promise<BaseQuery> {
-    const generator = new Generator({ prefixes: {} });
+    // Enable sparqlStar for RDF-star / SPARQL-star triple term support
+    const generator = new Generator({ prefixes: {}, sparqlStar: true });
     let queryString = generator.stringify(query);
 
     const queryType = (query as Query).queryType;
@@ -79,7 +80,8 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
         execute: async () => result.boolean
       };
     } else if (queryType === 'CONSTRUCT') {
-      const constructResult = await this.executeQuery(queryString, 'application/n-triples', useReasoning);
+      // Use TriG-star format to properly handle RDF-star triple terms
+      const constructResult = await this.executeQuery(queryString, 'application/x-trigstar', useReasoning);
       const quads = await this.parseNTriplesResult(constructResult as string);
 
       return {
@@ -94,29 +96,17 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
   }
 
   async quads(): Promise<Iterable<Quad>> {
+    // Use CONSTRUCT with TriG-star format to properly handle RDF-star triple terms
     const graphIri = this.iri.termType === 'DefaultGraph' ? '' : this.iri.value;
     const sparql = graphIri ?
-      `SELECT * WHERE { GRAPH <${graphIri}> { ?s ?p ?o } }` :
-      `SELECT * WHERE { ?s ?p ?o }`;
+      `CONSTRUCT { ?s ?p ?o } WHERE { GRAPH <${graphIri}> { ?s ?p ?o } }` :
+      `CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }`;
 
-    const result = await this.executeQuery(sparql, 'application/sparql-results+json', this.reasoning);
+    const result = await this.executeQuery(sparql, 'application/x-trigstar', this.reasoning);
+    const quads = await this.parseNTriplesResult(result as string);
 
-    const quads: Quad[] = [];
-    if (result.results?.bindings) {
-      result.results.bindings.forEach((binding: any) => {
-        const quad = factory.quad(
-          factory.namedNode(binding.s.value),
-          factory.namedNode(binding.p.value),
-          binding.o.type === 'uri' ?
-            factory.namedNode(binding.o.value) :
-            factory.literal(binding.o.value),
-          this.iri.termType === 'DefaultGraph' ? factory.defaultGraph() : this.iri
-        );
-        quads.push(quad);
-      });
-    }
-
-    return quads;
+    // Apply graph context to parsed quads
+    return this.applyGraphContext(quads);
   }
 
   async find(subject?: Term | null, predicate?: Term | null, object?: Term | null, graph?: Term | null): Promise<Iterable<Quad>> {
@@ -255,7 +245,8 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
    */
   async update(query: Update | string, options?: QueryOptions): Promise<void> {
     const parsedUpdate = this.prepareUpdate(query);
-    const generator = new Generator({ prefixes: parsedUpdate.prefixes });
+    // Enable sparqlStar for RDF-star / SPARQL-star triple term support
+    const generator = new Generator({ prefixes: parsedUpdate.prefixes, sparqlStar: true });
     const queryString = generator.stringify(parsedUpdate);
 
     await this.executeUpdate(queryString, options);
@@ -317,8 +308,8 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
       throw new Error(`Query failed: ${response.status} ${response.statusText}`);
     }
 
-    // For CONSTRUCT queries, return the text directly
-    if (contentType === 'application/n-triples') {
+    // For CONSTRUCT queries (N-Triples or TriG-star), return the text directly
+    if (contentType === 'application/n-triples' || contentType === 'application/x-trigstar') {
       return await response.text();
     }
 
@@ -433,10 +424,12 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
   }
 
   /**
-   * Parse N-Triples result into Quad array
+   * Parse RDF result (TriG-star format) into Quad array (supports RDF-star syntax)
+   * Note: GraphDB must be configured to return native RDF-star format (not urn:rdf4j:triple: encoding)
    */
   private async parseNTriplesResult(result: string): Promise<Quad[]> {
-    const parser = new N3.Parser({ format: 'N-Triples' });
+    // Use TriG* format to support RDF-star triple terms and named graphs
+    const parser = new N3.Parser({ format: 'application/trig*' });
     const quads: Quad[] = [];
 
     if (result && typeof result === 'string') {
@@ -474,12 +467,17 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
   }
 
   /**
-   * Get content type based on query type
+   * Get Accept header content type based on query type
+   * Uses RDF-star compatible formats to preserve triple terms
    */
   private getContentType(queryType: string): string {
-    return queryType === 'CONSTRUCT' || queryType === 'DESCRIBE'
-      ? 'application/n-triples'
-      : 'application/sparql-results+json';
+    if (queryType === 'CONSTRUCT' || queryType === 'DESCRIBE') {
+      // Request TriG-star format to get native triple terms (not encoded as urn:rdf4j:triple:xxx)
+      return 'application/x-trigstar';
+    }
+    // For SELECT/ASK, use standard JSON results format
+    // GraphDB's SPARQL-star JSON format includes 'triple' type for triple terms
+    return 'application/sparql-results+json';
   }
 
   /**
@@ -495,12 +493,13 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
 
     await this.executeWithTransaction(async (txUrl) => {
       if (operation === 'add') {
-        // ADD uses REST API with N-Quads
-        const nquads = await serializeQuads(quadWithGraph, { format: 'N-Quads' });
+        // ADD uses REST API with TriG-star format (application/x-trigstar) which supports both
+        // named graphs and RDF-star triple terms consistently
+        const data = await serializeQuads(quadWithGraph, { format: 'application/trig*' });
         const response = await fetch(`${txUrl}?action=ADD`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/n-quads' },
-          body: nquads,
+          headers: { 'Content-Type': 'application/x-trigstar' },
+          body: data,
         });
         if (!response.ok) {
           throw new Error(`Failed to add quads: ${response.status} ${response.statusText}\n${await response.text()}`);
@@ -572,6 +571,10 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
           result += `^^<${lit.datatype.value}>`;
         }
         return result;
+      case 'Quad':
+        // RDF-star / SPARQL-star triple term syntax: << s p o >>
+        const quad = term as Quad;
+        return `<< ${this.termToSparql(quad.subject)} ${this.termToSparql(quad.predicate)} ${this.termToSparql(quad.object)} >>`;
       default:
         throw new Error(`Cannot serialize term type ${term.termType} to SPARQL`);
     }
@@ -612,6 +615,14 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
 
       case 'bnode':
         return factory.blankNode(rawValue.value);
+
+      case 'triple':
+        // RDF-star / SPARQL-star triple term in SPARQL JSON results
+        // GraphDB returns triple terms with nested subject, predicate, object
+        const subject = this.convertSparqlBindingToRdfTerm(rawValue.value.subject);
+        const predicate = this.convertSparqlBindingToRdfTerm(rawValue.value.predicate);
+        const object = this.convertSparqlBindingToRdfTerm(rawValue.value.object);
+        return factory.tripleTerm(subject as any, predicate as any, object as any);
 
       default:
         console.warn(`Unknown SPARQL binding type: ${rawValue.type}`, rawValue);

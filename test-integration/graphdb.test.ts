@@ -4,9 +4,11 @@ import { testGraphInterface, testMutableGraphInterface } from '../test/graph.tes
 import { testSparqlInterface, testSparqlUpdateInterface } from '../test/sparql.test.js';
 import { testPullInterface } from "../test/pull.test.ts";
 import { testTransactionalGraphInterface } from '../test/transactional-graph.test.js';
-import { factory } from '../src/rdf.js';
+import { factory, namespace, XSD } from '../src/rdf.js';
 import type { Quad } from '../src/rdf.js';
 import { N3Graph } from '../src/graph/n3.js';
+
+const EX = namespace('http://example.org/');
 
 // Load environment variables and construct endpoint
 const protocol = process.env.GRAPHDB_PROTOCOL!;
@@ -749,6 +751,297 @@ describe('GraphDB Integration Tests', () => {
       expect(await baseData(readGraph)).toBe(1);
       expect(await entailedData(readGraph)).toBe(0);
 
+    });
+
+  });
+
+  // RDF-star / Triple Terms tests
+  describe('Triple Terms / RDF-star Support', () => {
+
+    test('should add quads with triple term subjects', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        // Create a triple term (statement about Alice knowing Bob)
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+
+        // Create a quad with the triple term as subject (annotating the statement)
+        const quad = factory.quad(
+          innerTriple,
+          EX.confidence,
+          factory.literal('0.95', XSD.decimal)
+        );
+
+        await graph.add([quad]);
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].subject.termType).toBe('Quad');
+
+        const subject = quads[0].subject as Quad;
+        expect(subject.subject.value).toBe('http://example.org/alice');
+        expect(subject.predicate.value).toBe('http://example.org/knows');
+        expect(subject.object.value).toBe('http://example.org/bob');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should add multiple quads with same triple term subject', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+
+        // Multiple annotations for the same statement
+        const quad1 = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+        const quad2 = factory.quad(innerTriple, EX.source, EX.socialNetwork);
+        const quad3 = factory.quad(innerTriple, EX.timestamp, factory.literal('2024-01-15', XSD.date));
+
+        await graph.add([quad1, quad2, quad3]);
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(3);
+
+        // All should have the same triple term subject
+        for (const q of quads) {
+          expect(q.subject.termType).toBe('Quad');
+          const subject = q.subject as Quad;
+          expect(subject.subject.value).toBe('http://example.org/alice');
+        }
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should remove quads with triple term subjects', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad1 = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+        const quad2 = factory.quad(innerTriple, EX.source, EX.socialNetwork);
+
+        await graph.add([quad1, quad2]);
+
+        let quads = [...await graph.quads()];
+        expect(quads.length).toBe(2);
+
+        // Remove one quad
+        await graph.remove([quad1]);
+
+        quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].predicate.value).toBe('http://example.org/source');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should preserve triple terms through transaction add/commit', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+
+        await graph.inTransaction(async (txGraph) => {
+          await txGraph.add([quad]);
+        });
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].subject.termType).toBe('Quad');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should rollback triple term quads on transaction failure', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+
+        try {
+          await graph.inTransaction(async (txGraph) => {
+            await txGraph.add([quad]);
+            throw new Error('Deliberate failure');
+          });
+        } catch (err) {
+          // Expected
+        }
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(0);
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should query triple terms with SPARQL SELECT', async () => {
+      const graph = await createTestGraph(false);
+      const defaultGraph = new GraphDBGraph(config, undefined, false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+
+        await graph.add([quad]);
+
+        // Query using SPARQL-star syntax
+        const results = await graph.select(`
+          PREFIX ex: <http://example.org/>
+          SELECT ?conf WHERE {
+            << ex:alice ex:knows ex:bob >> ex:confidence ?conf .
+          }
+        `);
+
+        const bindings = [...results];
+        expect(bindings.length).toBe(1);
+        expect(bindings[0].get('conf')?.value).toBe('0.95');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should query triple terms with SPARQL ASK', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+
+        await graph.add([quad]);
+
+        // ASK for existing triple term
+        const exists = await graph.ask(`
+          PREFIX ex: <http://example.org/>
+          ASK {
+            << ex:alice ex:knows ex:bob >> ex:confidence ?conf .
+          }
+        `);
+        expect(exists).toBe(true);
+
+        // ASK for non-existing triple term
+        const notExists = await graph.ask(`
+          PREFIX ex: <http://example.org/>
+          ASK {
+            << ex:charlie ex:knows ex:dave >> ex:confidence ?conf .
+          }
+        `);
+        expect(notExists).toBe(false);
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should handle SPARQL CONSTRUCT with triple terms', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+
+        await graph.add([quad]);
+
+        const result = await graph.construct(`
+          PREFIX ex: <http://example.org/>
+          CONSTRUCT { ?s ?p ?o }
+          WHERE { ?s ?p ?o }
+        `);
+
+        const quads = [...result.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].subject.termType).toBe('Quad');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should handle SPARQL UPDATE with triple terms (INSERT DATA)', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        // Insert triple term data using SPARQL UPDATE
+        await graph.update(`
+          PREFIX ex: <http://example.org/>
+          PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+          INSERT DATA {
+            << ex:alice ex:knows ex:bob >> ex:confidence "0.95"^^xsd:decimal .
+          }
+        `);
+
+        const quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+        expect(quads[0].subject.termType).toBe('Quad');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('should handle SPARQL UPDATE with triple terms (DELETE DATA)', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
+
+        await graph.add([quad]);
+
+        let quads = [...await graph.quads()];
+        expect(quads.length).toBe(1);
+
+        // Delete using SPARQL UPDATE
+        await graph.update(`
+          PREFIX ex: <http://example.org/>
+          PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+          DELETE DATA {
+            << ex:alice ex:knows ex:bob >> ex:confidence "0.95"^^xsd:decimal .
+          }
+        `);
+
+        quads = [...await graph.quads()];
+        expect(quads.length).toBe(0);
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
+    });
+
+    test('real-world: annotating statements with provenance and confidence', async () => {
+      const graph = await createTestGraph(false);
+
+      try {
+        // Create several statements with annotations
+        const stmt1 = factory.tripleTerm(EX.alice, EX.worksAt, EX.acmeCorp);
+        const stmt2 = factory.tripleTerm(EX.bob, EX.worksAt, EX.acmeCorp);
+
+        // Add provenance and confidence annotations
+        await graph.add([
+          factory.quad(stmt1, EX.confidence, factory.literal('0.99', XSD.decimal)),
+          factory.quad(stmt1, EX.source, EX.hrDatabase),
+          factory.quad(stmt2, EX.confidence, factory.literal('0.75', XSD.decimal)),
+          factory.quad(stmt2, EX.source, EX.linkedIn),
+        ]);
+
+        // Query for high-confidence statements
+        const results = await graph.select(`
+          PREFIX ex: <http://example.org/>
+          PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+          SELECT ?person ?company ?conf WHERE {
+            << ?person ex:worksAt ?company >> ex:confidence ?conf .
+            FILTER(?conf > 0.9)
+          }
+        `);
+
+        const bindings = [...results];
+        expect(bindings.length).toBe(1);
+        expect(bindings[0].get('person')?.value).toBe('http://example.org/alice');
+        expect(bindings[0].get('conf')?.value).toBe('0.99');
+      } finally {
+        try { await graph.deleteAll(); } catch {}
+      }
     });
 
   });
