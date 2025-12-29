@@ -182,18 +182,6 @@ export class ImmutableDataFactory implements RDFJS.DataFactory {
     return new ImmutableBaseQuad(s, p, o, g) as Quad;
   }
 
-  /**
-   * Creates a triple term (RDF-star / RDF 1.2) - a quad that can be used as subject or object of another quad.
-   * Triple terms are quads in the default graph with termType "Quad".
-   * @param subject - The subject of the triple term
-   * @param predicate - The predicate of the triple term
-   * @param object - The object of the triple term
-   * @returns A Quad suitable for use as a triple term
-   */
-  tripleTerm(subject: RDFJS.Quad_Subject, predicate: RDFJS.Quad_Predicate, object: RDFJS.Quad_Object): Quad {
-    return this.quad(subject, predicate, object, this.defaultGraph());
-  }
-
   fromTerm(original: RDFJS.NamedNode): NamedNode;
   fromTerm(original: RDFJS.BlankNode): BlankNode;
   fromTerm(original: RDFJS.Literal): Literal;

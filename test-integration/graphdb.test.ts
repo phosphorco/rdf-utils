@@ -763,7 +763,7 @@ describe('GraphDB Integration Tests', () => {
 
       try {
         // Create a triple term (statement about Alice knowing Bob)
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
 
         // Create a quad with the triple term as subject (annotating the statement)
         const quad = factory.quad(
@@ -791,7 +791,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
 
         // Multiple annotations for the same statement
         const quad1 = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
@@ -818,7 +818,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad1 = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
         const quad2 = factory.quad(innerTriple, EX.source, EX.socialNetwork);
 
@@ -842,7 +842,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
 
         await graph.inTransaction(async (txGraph) => {
@@ -861,7 +861,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
 
         try {
@@ -885,7 +885,7 @@ describe('GraphDB Integration Tests', () => {
       const defaultGraph = new GraphDBGraph(config, undefined, false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
 
         await graph.add([quad]);
@@ -910,7 +910,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
 
         await graph.add([quad]);
@@ -941,7 +941,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
 
         await graph.add([quad]);
@@ -985,7 +985,7 @@ describe('GraphDB Integration Tests', () => {
       const graph = await createTestGraph(false);
 
       try {
-        const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+        const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
         const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.95', XSD.decimal));
 
         await graph.add([quad]);
@@ -1014,8 +1014,8 @@ describe('GraphDB Integration Tests', () => {
 
       try {
         // Create several statements with annotations
-        const stmt1 = factory.tripleTerm(EX.alice, EX.worksAt, EX.acmeCorp);
-        const stmt2 = factory.tripleTerm(EX.bob, EX.worksAt, EX.acmeCorp);
+        const stmt1 = factory.quad(EX.alice, EX.worksAt, EX.acmeCorp);
+        const stmt2 = factory.quad(EX.bob, EX.worksAt, EX.acmeCorp);
 
         // Add provenance and confidence annotations
         await graph.add([

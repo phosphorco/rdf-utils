@@ -11,8 +11,8 @@ describe('Triple Terms / RDF-star Support', () => {
 
   describe('Factory Methods', () => {
 
-    test('factory.tripleTerm() creates a quad for use as triple term', () => {
-      const tripleTerm = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+    test('factory.quad() creates a quad for use as triple term', () => {
+      const tripleTerm = factory.quad(EX.alice, EX.knows, EX.bob);
 
       expect(tripleTerm.termType).toBe('Quad');
       expect(tripleTerm.value).toBe('');
@@ -23,7 +23,7 @@ describe('Triple Terms / RDF-star Support', () => {
     });
 
     test('factory.quad() accepts triple term as object', () => {
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const outerQuad = factory.quad(EX.statement1, EX.confidence, innerTriple);
 
       expect(outerQuad.object.termType).toBe('Quad');
@@ -33,7 +33,7 @@ describe('Triple Terms / RDF-star Support', () => {
     });
 
     test('factory.quad() accepts triple term as subject', () => {
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const outerQuad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       expect(outerQuad.subject.termType).toBe('Quad');
@@ -96,22 +96,22 @@ describe('Triple Terms / RDF-star Support', () => {
   describe('Equality and HashCode', () => {
 
     test('triple term equality works for identical embedded triples', () => {
-      const triple1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const triple2 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const triple1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const triple2 = factory.quad(EX.alice, EX.knows, EX.bob);
 
       expect(triple1.equals(triple2)).toBe(true);
     });
 
     test('triple term equality fails for different embedded triples', () => {
-      const triple1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const triple2 = factory.tripleTerm(EX.alice, EX.knows, EX.charlie);
+      const triple1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const triple2 = factory.quad(EX.alice, EX.knows, EX.charlie);
 
       expect(triple1.equals(triple2)).toBe(false);
     });
 
     test('quads with triple term objects have correct equality', () => {
-      const inner1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const inner2 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const inner1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const inner2 = factory.quad(EX.alice, EX.knows, EX.bob);
 
       const quad1 = factory.quad(inner1, EX.confidence, factory.literal('0.9'));
       const quad2 = factory.quad(inner2, EX.confidence, factory.literal('0.9'));
@@ -120,8 +120,8 @@ describe('Triple Terms / RDF-star Support', () => {
     });
 
     test('quads with different triple term objects are not equal', () => {
-      const inner1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const inner2 = factory.tripleTerm(EX.alice, EX.knows, EX.charlie);
+      const inner1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const inner2 = factory.quad(EX.alice, EX.knows, EX.charlie);
 
       const quad1 = factory.quad(inner1, EX.confidence, factory.literal('0.9'));
       const quad2 = factory.quad(inner2, EX.confidence, factory.literal('0.9'));
@@ -130,15 +130,15 @@ describe('Triple Terms / RDF-star Support', () => {
     });
 
     test('triple terms have consistent hashCode', () => {
-      const triple1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const triple2 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const triple1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const triple2 = factory.quad(EX.alice, EX.knows, EX.bob);
 
       expect(triple1.hashCode()).toBe(triple2.hashCode());
     });
 
     test('different triple terms typically have different hashCode', () => {
-      const triple1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const triple2 = factory.tripleTerm(EX.charlie, EX.knows, EX.dave);
+      const triple1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const triple2 = factory.quad(EX.charlie, EX.knows, EX.dave);
 
       // Note: hash collision is possible but extremely unlikely for different triples
       expect(triple1.hashCode()).not.toBe(triple2.hashCode());
@@ -146,9 +146,9 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('nested triple terms have correct equality', () => {
       // Create nested: << << :a :b :c >> :p :o >>
-      const innerTriple = factory.tripleTerm(EX.a, EX.b, EX.c);
-      const nested1 = factory.tripleTerm(innerTriple, EX.p, EX.o);
-      const nested2 = factory.tripleTerm(factory.tripleTerm(EX.a, EX.b, EX.c), EX.p, EX.o);
+      const innerTriple = factory.quad(EX.a, EX.b, EX.c);
+      const nested1 = factory.quad(innerTriple, EX.p, EX.o);
+      const nested2 = factory.quad(factory.quad(EX.a, EX.b, EX.c), EX.p, EX.o);
 
       expect(nested1.equals(nested2)).toBe(true);
     });
@@ -159,7 +159,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('N3Graph can add quads with triple term objects', () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       graph.add([quad]);
@@ -171,7 +171,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('N3Graph can add quads with triple term subjects', () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       graph.add([quad]);
@@ -186,7 +186,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('N3Graph preserves triple terms through add/quads cycle', () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const originalQuad = factory.quad(innerTriple, EX.source, EX.socialNetwork);
 
       graph.add([originalQuad]);
@@ -198,7 +198,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('N3Graph can find quads by triple term subject', () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad1 = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
       const quad2 = factory.quad(EX.other, EX.value, factory.literal('test'));
 
@@ -216,7 +216,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('ImmutableSetGraph can add quads with triple term objects', () => {
       let graph = new ImmutableSetGraph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       graph = graph.add([quad]);
@@ -228,7 +228,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('ImmutableSetGraph preserves triple terms through add/quads cycle', () => {
       let graph = new ImmutableSetGraph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const originalQuad = factory.quad(innerTriple, EX.source, EX.socialNetwork);
 
       graph = graph.add([originalQuad]);
@@ -240,7 +240,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('ImmutableSetGraph can find quads by triple term subject', () => {
       let graph = new ImmutableSetGraph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad1 = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
       const quad2 = factory.quad(EX.other, EX.value, factory.literal('test'));
 
@@ -253,8 +253,8 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('ImmutableSetGraph deduplicates quads with same triple terms', () => {
       let graph = new ImmutableSetGraph();
-      const innerTriple1 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
-      const innerTriple2 = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple1 = factory.quad(EX.alice, EX.knows, EX.bob);
+      const innerTriple2 = factory.quad(EX.alice, EX.knows, EX.bob);
 
       const quad1 = factory.quad(innerTriple1, EX.confidence, factory.literal('0.9'));
       const quad2 = factory.quad(innerTriple2, EX.confidence, factory.literal('0.9'));
@@ -329,7 +329,7 @@ describe('Triple Terms / RDF-star Support', () => {
   describe('Serialization', () => {
 
     test('serializeQuads outputs Turtle-star for quads with triple terms', async () => {
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       const serialized = await serializeQuads([quad], { format: 'text/turtle' });
@@ -366,7 +366,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('SPARQL SELECT can query quads with triple term subjects', async () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       graph.add([quad]);
@@ -384,7 +384,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('SPARQL CONSTRUCT preserves triple terms', async () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       graph.add([quad]);
@@ -402,7 +402,7 @@ describe('Triple Terms / RDF-star Support', () => {
 
     test('SPARQL ASK returns true for graph with triple terms', async () => {
       const graph = new N3Graph();
-      const innerTriple = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const innerTriple = factory.quad(EX.alice, EX.knows, EX.bob);
       const quad = factory.quad(innerTriple, EX.confidence, factory.literal('0.9', XSD.decimal));
 
       graph.add([quad]);
@@ -422,7 +422,7 @@ describe('Triple Terms / RDF-star Support', () => {
       const graph = new N3Graph();
 
       // Create the statement "Alice knows Bob"
-      const statement = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const statement = factory.quad(EX.alice, EX.knows, EX.bob);
 
       // Annotate with confidence
       const annotation = factory.quad(statement, EX.confidence, factory.literal('0.95', XSD.decimal));
@@ -443,7 +443,7 @@ describe('Triple Terms / RDF-star Support', () => {
       const graph = new N3Graph();
 
       // The original statement
-      const statement = factory.tripleTerm(EX.alice, EX.age, factory.literal('30', XSD.integer));
+      const statement = factory.quad(EX.alice, EX.age, factory.literal('30', XSD.integer));
 
       // Multiple annotations for the same statement
       graph.add([
@@ -466,14 +466,14 @@ describe('Triple Terms / RDF-star Support', () => {
       const graph = new N3Graph();
 
       // "Alice might know Bob" - uncertain relationship
-      const mightKnow = factory.tripleTerm(EX.alice, EX.knows, EX.bob);
+      const mightKnow = factory.quad(EX.alice, EX.knows, EX.bob);
       graph.add([
         factory.quad(mightKnow, EX.certainty, factory.literal('possible')),
         factory.quad(mightKnow, EX.evidenceStrength, factory.literal('weak'))
       ]);
 
       // "Alice definitely works at Company" - certain relationship
-      const worksAt = factory.tripleTerm(EX.alice, EX.worksAt, EX.company);
+      const worksAt = factory.quad(EX.alice, EX.worksAt, EX.company);
       graph.add([
         factory.quad(worksAt, EX.certainty, factory.literal('confirmed')),
         factory.quad(worksAt, EX.evidenceStrength, factory.literal('strong'))
@@ -487,7 +487,7 @@ describe('Triple Terms / RDF-star Support', () => {
       const graph = new N3Graph();
 
       // "Alice worked at Company from 2020 to 2023"
-      const employment = factory.tripleTerm(EX.alice, EX.worksAt, EX.company);
+      const employment = factory.quad(EX.alice, EX.worksAt, EX.company);
       graph.add([
         factory.quad(employment, EX.startDate, factory.literal('2020-01-01', XSD.date)),
         factory.quad(employment, EX.endDate, factory.literal('2023-12-31', XSD.date))

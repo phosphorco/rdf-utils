@@ -622,7 +622,7 @@ export class GraphDBGraph extends BaseGraph<false> implements MutableGraph<false
         const subject = this.convertSparqlBindingToRdfTerm(rawValue.value.subject);
         const predicate = this.convertSparqlBindingToRdfTerm(rawValue.value.predicate);
         const object = this.convertSparqlBindingToRdfTerm(rawValue.value.object);
-        return factory.tripleTerm(subject as any, predicate as any, object as any);
+        return factory.quad(subject as any, predicate as any, object as any);
 
       default:
         console.warn(`Unknown SPARQL binding type: ${rawValue.type}`, rawValue);
